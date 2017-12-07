@@ -26,6 +26,8 @@ namespace WebAppNetCore.Controllers
         {
             ViewData["EditMyProfileUri"] = Configuration.EditMyProfileUri();
 
+            ViewData["Origin"] = $"{Request.Scheme}://{Request.Host.Value}";
+
             return View();
         }
 
