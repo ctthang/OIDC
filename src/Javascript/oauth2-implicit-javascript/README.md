@@ -4,7 +4,7 @@ It aims to illustrate how a SPA could negotiate token from Identify OAuth 2.0 us
 
 # Configuration
 ## Client configuration
-All the settings are placed on implicit-test.html as follows
+All the settings are placed on config.js as follows
 - client_id
 - redirect_uri
 - providerInfo
@@ -15,6 +15,12 @@ Assumed that SPA sample is deployed at https://spa.safewhere.local, and Identify
 - redirect_uri: https://spa.safewhere.local/login-callback.html
 - providerInfo: https://develop.safewhere.local/runtime/
 - scope: specify scopes needed, default values are 'read' and 'write'.
+
+If you are in NodeJS development environment, you could use built-in self hosting: open command promt and navigate to oauth2-implicit-javascript folder and type 'npm start' to start web server listening on https://localhost:44307. Identify OAuth is at https://develop.safewhere.local/runtime/ the above settings will be
+- client_id: [a client id]
+- redirect_uri: https://localhost:44307/login-callback.html
+- providerInfo: https://develop.safewhere.local/runtime/
+- scope: specify scopes needed, default values are 'read', 'write' and 'openid' ('openid' is required)
 
 ## Identify configuration
 There must be an OAuth 2.0 protocol configuration. More details about Identify OAuth 2.0 protocol connection can be found on https://docs.safewhere.com

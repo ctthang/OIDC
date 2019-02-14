@@ -1,0 +1,11 @@
+{
+  "name": "oidc-implicit-javascript",
+  "version": "1.0.0",
+  "description": "This is an SPA (single page application) sample which works against Identify OAuth 2.0 service. \r It aims to illustrate how a SPA could negotiate token from Identify OAuth 2.0 using implicit grant type on OpenId Connect flow.",
+  "main": "openidconnect.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
