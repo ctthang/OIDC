@@ -20,7 +20,7 @@ If you are in NodeJS development environment, you could use built-in self hostin
 - client_id: [a client id]
 - redirect_uri: https://localhost:44307/login-callback.html
 - providerInfo: https://develop.safewhere.local/runtime/
-- scope: specify scopes needed, default values are 'read', 'write' and 'openid' ('openid' is required)
+- scope: specify scopes needed, default values are 'read', 'write'
 
 ## Identify configuration
 There must be an OAuth 2.0 protocol configuration. More details about Identify OAuth 2.0 protocol connection can be found on https://docs.safewhere.com
