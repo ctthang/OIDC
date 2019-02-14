@@ -35,5 +35,5 @@ That means the SPA's address must be put on setting "Allowed domains in CORS ori
 * Notice that this setting is only available from Identify 5.4++ 
 
 # Execute
-After the client finished his setup, he can try to access https://spa.safewhere.local/implicit-test.html to verify its run
+After the client finished his setup, he can try to access https://spa.safewhere.local/implicit-test.html or https://localhost:44307/implicit-test.html to verify its run
 
