@@ -490,7 +490,7 @@ OIDC.generateLoginRequest = function(reqOptions) {
         sessionStorage['nonce'] = nonce;
 
         var response_type = 'id_token';
-        var scope = 'openid';
+        var scope = ''; // 'openid';
         var display = null;
         var max_age = null;
         var claims = null;

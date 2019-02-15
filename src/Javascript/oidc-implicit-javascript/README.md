@@ -14,13 +14,13 @@ Assumed that SPA sample is deployed at https://spa.safewhere.local, and Identify
 - client_id: [a client id]
 - redirect_uri: https://spa.safewhere.local/login-callback.html
 - providerInfo: https://develop.safewhere.local/runtime/
-- scope: specify scopes needed, default values are 'read', 'write' and 'openid' ('openid' is required)
+- scope: specify scopes needed, default value is 'openid' ('openid' is required)
 
 If you are in NodeJS development environment, you could use built-in self hosting: open command promt and navigate to oidc-implicit-javascript folder and type 'npm start' to start web server listening on https://localhost:44307. Identify OAuth is at https://develop.safewhere.local/runtime/ the above settings will be
 - client_id: [a client id]
 - redirect_uri: https://localhost:44307/login-callback.html
 - providerInfo: https://develop.safewhere.local/runtime/
-- scope: specify scopes needed, default values are 'read', 'write' and 'openid' ('openid' is required)
+- scope: specify scopes needed, default value is 'openid' ('openid' is required)
 
 ## Identify configuration
 There must be an OAuth 2.0 protocol configuration. More details about Identify OAuth 2.0 protocol connection can be found on https://docs.safewhere.com

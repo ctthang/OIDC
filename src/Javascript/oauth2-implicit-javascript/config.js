@@ -1,7 +1,6 @@
 var clientInfo = {
   client_id: 'spa_clientid',
   redirect_uri: 'https://spa.safewhere.local/login-callback.html',
-  scope: 'read write'
 };
 
 var providerInfo = OIDC.discover('https://develop.safewhere.local/runtime/');

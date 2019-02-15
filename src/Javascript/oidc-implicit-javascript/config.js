@@ -1,10 +1,10 @@
 var clientInfo = {
-    client_id : 'spa_clientid',
-    redirect_uri : 'https://spa.safewhere.local/login-callback.html',
-    scope : 'openid read write'
+    client_id : 'client id _ 80+MuQqthzU=',
+    redirect_uri : 'https://localhost:44307/login-callback.html',
+    scope : 'openid'
 };
 
-var providerInfo = OIDC.discover('https://develop.safewhere.local/runtime/');
+var providerInfo = OIDC.discover('https://identify2.safewhere.local/runtime/');
 OIDC.setClientInfo( clientInfo );
 OIDC.setProviderInfo( providerInfo );
 OIDC.storeInfo(providerInfo, clientInfo);
