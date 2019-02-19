@@ -549,7 +549,7 @@ OIDC.generateLoginRequest = function(reqOptions) {
         // Construct the redirect URL
         // For getting an id token, response_type of
         // "token id_token" (note the space), scope of
-        // "openid", and some value for nonce is required.
+        // "", and some value for nonce is required.
         // client_id must be the consumer key of the connected app.
         // redirect_uri must match the callback URL configured for
         // the connected app.
@@ -597,7 +597,7 @@ OIDC.generateLoginRequest = function(reqOptions) {
 *
 * // login with options
 * OIDC.login( {
-*               scope : 'openid profile',
+*               scope : 'profile',
 *               response_type : 'token id_token',
 *               max_age : 60,
 *               claims : {
@@ -607,7 +607,7 @@ OIDC.generateLoginRequest = function(reqOptions) {
 *              }
 *            );
 *
-* // login with default scope=openid, response_type=id_token
+* // login with default scope=, response_type=id_token
 * OIDC.login();
 */
 OIDC.login = function(reqOptions) {
@@ -658,7 +658,7 @@ OIDC.login = function(reqOptions) {
     sessionStorage['nonce'] = nonce;
 
     var response_type = 'id_token';
-    var scope = 'openid';
+    var scope = ''; //'openid';
     var display = null;
     var max_age = null;
     var claims = null;
@@ -717,7 +717,7 @@ OIDC.login = function(reqOptions) {
     // Construct the redirect URL
     // For getting an id token, response_type of
     // "token id_token" (note the space), scope of
-    // "openid", and some value for nonce is required.
+    // "", and some value for nonce is required.
     // client_id must be the consumer key of the connected app.
     // redirect_uri must match the callback URL configured for
     // the connected app.
@@ -1193,7 +1193,7 @@ OIDC.getUserInfo = function(access_token)
  * Subject Type: Public
  * Grant Type: implicit
  * Response Type: token, id_token
- * Scopes: email, openid, profile
+ * Scopes: email, profile
  * @function registerClient
  * @memberof OIDC
  * @param {string} redirect_uri     - The redirect URI string
