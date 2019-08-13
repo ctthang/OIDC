@@ -28,8 +28,11 @@ namespace WebAppNetCore
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddMvc();
-
+            services.AddSession(options => {
+                options.IdleTimeout = TimeSpan.FromMinutes(30);
+            });
             services.ConfigureOpenIdServices(Configuration);
+            services.AddSingleton<IConfiguration>(Configuration);
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -45,6 +48,7 @@ namespace WebAppNetCore
                 app.UseExceptionHandler("/Home/Error");
             }
 
+            app.UseSession();
             loggerFactory.AddConsole(Configuration.GetSection("Logging"));
             loggerFactory.AddDebug();
 

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -17,6 +19,11 @@ namespace WebAppNetCore.Controllers
 {
     public class AccountController : Controller
     {
+        private IConfiguration configuration;
+        public AccountController(IConfiguration configuration)
+        {
+            this.configuration = configuration;
+        }
         //
         // GET: /Account/SignIn
         [HttpGet]
@@ -55,6 +62,16 @@ namespace WebAppNetCore.Controllers
         [HttpGet]
         public IActionResult AccessDenied()
         {
+            return View();
+        }
+
+        public ActionResult RPIFrame()
+        {
+            var sessionState = HttpContext.User.Claims.Where(x => x.Type == OpenIdConnectConstants.SessionState).Select(x => x.Value).FirstOrDefault();
+            ViewData[OpenIdConnectConstants.ClientId] = configuration.ClientId();
+            ViewData[OpenIdConnectConstants.SessionState] = sessionState;
+            ViewData["OPDomain"] = configuration.IssuerDomain();
+
             return View();
         }
 

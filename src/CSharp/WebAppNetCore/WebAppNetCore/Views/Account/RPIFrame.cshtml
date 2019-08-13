@@ -1,0 +1,67 @@
+﻿@{
+    Layout = null;
+}
+<html>
+<head>
+    <title>OpenID Connect Session Management Sample RP : RP iframe</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/sha256.js"></script>
+    <script language="JavaScript" type="text/javascript">
+        var stat = "unchanged";
+
+        var client_id = "@ViewData["clientId"]";
+        var session_state = "@ViewData["session_state"]";
+        var mes = client_id + " " + session_state;
+
+        var opDomain = "@ViewData["OPDomain"]";
+
+        function check_session() {
+            var win = window.parent.document.getElementById("opIFrame").contentWindow;
+            win.postMessage(mes, opDomain);
+        }
+
+        function setTimer() {
+            window.parent.document.getElementById('notice').innerHTML = "Checking OP Session Status...";
+            check_session();
+            setInterval("check_session()", 3 * 1000);
+        }
+
+        if (window.addEventListener) {
+            window.addEventListener("message", receiveMessage, false);
+        } else if (window.attachEvent) {
+            window.attachEvent("onmessage", receiveMessage);
+        }
+
+        function receiveMessage(e) {
+            if (e.origin !== opDomain) { return; }
+            stat = e.data;
+            noticeToParentWindow(stat);
+        }
+
+        function noticeToParentWindow(stat) {
+            if (stat == "changed") {
+                window.parent.document.getElementById('notice').innerHTML = "You are logged out of the OP";
+                //Todo: need to send token request with prompt is none to check if identity is actually changed or not
+                //if yes, call signout. Otherwise, update session state
+                window.parent.location = "@Url.Action("SignOut", "Account")";
+            }
+            //do nothing
+        }
+
+        //function eraseCookie(name) {
+        //    createCookie(name, "", -1);
+        //}
+
+        //function generateGuid() {
+        //    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        //        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        //        return v.toString(16);
+        //    });
+        //}
+    </script>
+</head>
+<body onload="setTimer()">
+    This is RP_IFrame
+</body>
+</html>

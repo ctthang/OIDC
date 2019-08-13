@@ -154,7 +154,6 @@ namespace AspnetWebMvc
             }
             else if (ApplicationSettings.AuthenticationType == "client_secret_jwt")
             {
-                result.Add("client_id", this.clientId);
                 result.Add("client_assertion", GenerateClientAssertion());
                 result.Add("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer");
             }
