@@ -71,6 +71,7 @@ namespace WebAppNetCore.Controllers
             ViewData[OpenIdConnectConstants.ClientId] = configuration.ClientId();
             ViewData[OpenIdConnectConstants.SessionState] = sessionState;
             ViewData["OPDomain"] = configuration.IssuerDomain();
+            //ViewData["OPDomain"] = "https://localhost:44307";
 
             return View();
         }

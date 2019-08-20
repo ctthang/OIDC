@@ -10,9 +10,6 @@
         <li><a href="@ViewData["EditMyProfileUri"]?origin=@ViewData["Origin"]" class="trigger">Edit My Profile</a></li>
         <li><a asp-area="" asp-controller="Account" asp-action="SignOut">Sign out</a></li>
     </ul>
-    <div>
-        <label name='notice' id='notice' />
-    </div>
     <iframe frameborder="0" allowtransparency="true" height="0" width="0" src="@Url.Action("RPIFrame", "Account")"></iframe>
     <iframe frameborder="0" allowtransparency="true" height="0" width="0" src='@ViewData["CheckSessionIframeUri"]' id="opIFrame"></iframe>
 }

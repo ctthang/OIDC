@@ -11,8 +11,8 @@
         var stat = "unchanged";
 
         var client_id = "@ViewData["clientId"]";
-        var session_state = "@ViewData["session_state"]";
-        var mes = client_id + " " + session_state;
+        var session_state = "@Html.Raw(ViewData["session_state"])";
+        var mes = client_id + "########" + session_state;
 
         var opDomain = "@ViewData["OPDomain"]";
 
@@ -41,24 +41,16 @@
 
         function noticeToParentWindow(stat) {
             if (stat == "changed") {
-                window.parent.document.getElementById('notice').innerHTML = "You are logged out of the OP";
-                //Todo: need to send token request with prompt is none to check if identity is actually changed or not
-                //if yes, call signout. Otherwise, update session state
-                window.parent.location = "@Url.Action("SignOut", "Account")";
+                window.parent.document.getElementById('notice').innerHTML = "stat is changed now. Sending re-authentication with prompt=none to fetch current user identity now";
+                if (reauthenticate()) {
+
+                }
+                else {
+                    window.parent.location = "@Url.Action("SignOut", "Account")";
+                }
             }
             //do nothing
         }
-
-        //function eraseCookie(name) {
-        //    createCookie(name, "", -1);
-        //}
-
-        //function generateGuid() {
-        //    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        //        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-        //        return v.toString(16);
-        //    });
-        //}
     </script>
 </head>
 <body onload="setTimer()">
