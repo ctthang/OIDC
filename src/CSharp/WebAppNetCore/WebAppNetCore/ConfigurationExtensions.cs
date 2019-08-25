@@ -6,6 +6,10 @@ namespace WebAppNetCore
 {
     public static class ConfigurationExtensions
     {
+        public static string Scope(this IConfiguration configuration)
+        {
+            return configuration["OpenIdConnectOptions:Scope"];
+        }
         public static string ClientId(this IConfiguration configuration)
         {
             return configuration["OpenIdConnectOptions:ClientId"];

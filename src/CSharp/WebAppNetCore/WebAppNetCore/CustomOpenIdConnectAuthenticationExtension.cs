@@ -34,6 +34,7 @@ namespace WebAppNetCore
         {
             string accessToken = string.Empty;
             string sessionState = string.Empty;
+            string idToken = string.Empty;
 
             connectOptions.ClientId = configuration.ClientId();
             connectOptions.ClientSecret = configuration.ClientSecret();
@@ -66,6 +67,7 @@ namespace WebAppNetCore
                     Console.WriteLine("Token = " + context.TokenEndpointResponse.AccessToken);
                     Console.WriteLine("OnTokenResponseReceived.");
                     accessToken = context.TokenEndpointResponse.AccessToken;
+                    idToken = context.TokenEndpointResponse.IdToken;
                     sessionState = context.TokenEndpointResponse.SessionState;
                     await Task.FromResult(0);
                 },
@@ -95,7 +97,7 @@ namespace WebAppNetCore
                     Console.WriteLine(context.SecurityToken.ToString());
                     if (accessToken != null)
                     {
-                        var token = new JwtSecurityToken(accessToken);
+                        //var token = new JwtSecurityToken(accessToken);
                         ClaimsIdentity identity = context.Principal.Identity as ClaimsIdentity;
                         if (identity != null)
                         {
@@ -104,6 +106,7 @@ namespace WebAppNetCore
                             {
                                 identity.AddClaim(claim);
                             }
+                            identity.AddClaim(new Claim(OpenIdConnectConstants.IdToken, idToken));
                             //AddClaim(identity, token, ClaimsPrincipalExtension.UserIdClaimType);
                             //AddClaim(identity, token, ClaimsPrincipalExtension.RestApiRoleClaimType);
                             //AddClaim(identity, token, ClaimsPrincipalExtension.AnyIDRoleClaimType);

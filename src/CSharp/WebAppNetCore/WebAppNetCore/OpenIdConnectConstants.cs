@@ -10,5 +10,6 @@ namespace WebAppNetCore
         public static string SessionState = "session_state";
         public static string ClientId = "clientId";
         public static string AccessToken = "access_token";
+        public static string IdToken = "id_token";
     }
 }
