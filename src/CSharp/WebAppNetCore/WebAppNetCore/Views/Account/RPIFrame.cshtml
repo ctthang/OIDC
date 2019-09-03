@@ -26,7 +26,7 @@
         }
 
         function setTimer() {
-            //reauthenticate();
+            reauthenticate();
             window.parent.document.getElementById('notice').innerHTML = "Checking OP Session Status...";
             //check_session();
             checkSessionInterval = setInterval("check_session()", 3 * 1000);
@@ -59,7 +59,8 @@
                 success: function (data) {
                     window.parent.document.getElementById('notice').innerHTML = "reauthentication is done" + data.authorizationResult.session;
                     if (data.authorizationResult.isLoggedOut) {
-                        window.parent.location = "@Url.Action("SignOut", "Account")";
+                        alert("logged out");
+                        //window.parent.location = "@Url.Action("SignOut", "Account")";
                     }
                 },
                 error: function () {
