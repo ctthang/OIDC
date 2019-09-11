@@ -99,26 +99,60 @@ namespace AspnetWebMvc
                 , ApplicationSettings.UrlEncode(scope)
                 , ApplicationSettings.UrlEncode(redirectUri)
                 , ApplicationSettings.UrlEncode(responseType));
-            if (!string.IsNullOrEmpty(maxAge))
+            if (ApplicationSettings.UsingRequestObject != "true")
             {
-                str = string.Format("{0}&max_age={1}", str, ApplicationSettings.UrlEncode(maxAge));
+                if (!string.IsNullOrEmpty(maxAge))
+                {
+                    str = string.Format("{0}&max_age={1}", str, ApplicationSettings.UrlEncode(maxAge));
+                }
+                if (!string.IsNullOrEmpty(responseMode))
+                {
+                    str = string.Format("{0}&response_mode={1}", str, ApplicationSettings.UrlEncode(responseMode));
+                }
+                if (!string.IsNullOrWhiteSpace(state))
+                {
+                    str = string.Format("{0}&state={1}", str, ApplicationSettings.UrlEncode(state));
+                }
+                if (!string.IsNullOrWhiteSpace(prompt))
+                {
+                    str = string.Format("{0}&prompt={1}", str, ApplicationSettings.UrlEncode(prompt));
+                }
+                if (!string.IsNullOrWhiteSpace(nonce))
+                {
+                    str = string.Format("{0}&nonce={1}", str, ApplicationSettings.UrlEncode(nonce));
+                }
             }
-            if (!string.IsNullOrEmpty(responseMode))
+            else
             {
-                str = string.Format("{0}&response_mode={1}", str, ApplicationSettings.UrlEncode(responseMode));
+                var claimsIdentify = new ClaimsIdentity();
+                claimsIdentify.AddClaim(new Claim("client_id", clientId));
+                claimsIdentify.AddClaim(new Claim("response_type", responseType));
+                claimsIdentify.AddClaim(new Claim("scope", scope));
+                claimsIdentify.AddClaim(new Claim("redirect_uri", redirectUri));
+                claimsIdentify.AddClaim(new Claim("max_age", maxAge));
+                claimsIdentify.AddClaim(new Claim("response_mode", responseMode));
+                claimsIdentify.AddClaim(new Claim("state", state));
+                claimsIdentify.AddClaim(new Claim("prompt", prompt));
+                claimsIdentify.AddClaim(new Claim("nonce", nonce));
+                var securityTokenDescriptor = new SecurityTokenDescriptor
+                {
+                    Subject = claimsIdentify,
+                    Issuer = clientId,
+                    IssuedAt = DateTime.UtcNow,
+                    Expires = DateTime.UtcNow.AddYears(10),
+                    Audience = endpoint
+                };
+
+                if (ApplicationSettings.SignRequestObject == "true")
+                {
+                    var signingCertificate = LoadCertificate(StoreName.My, StoreLocation.LocalMachine, ApplicationSettings.ClientCertificate);
+                    securityTokenDescriptor.SigningCredentials = new X509SigningCredentials(signingCertificate, "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256");
+                }
+
+                var token = new JwtSecurityTokenHandler().CreateEncodedJwt(securityTokenDescriptor);
+                str += "&request=" + token;
             }
-            if (!string.IsNullOrWhiteSpace(state))
-            {
-                str = string.Format("{0}&state={1}", str, ApplicationSettings.UrlEncode(state));
-            }
-            if (!string.IsNullOrWhiteSpace(prompt))
-            {
-                str = string.Format("{0}&prompt={1}", str, ApplicationSettings.UrlEncode(prompt));
-            }
-            if (!string.IsNullOrWhiteSpace(nonce))
-            {
-                str = string.Format("{0}&nonce={1}", str, ApplicationSettings.UrlEncode(nonce));
-            }
+
             return str;
         }
 

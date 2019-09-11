@@ -48,6 +48,22 @@ namespace OAuth2ClientSamples.Controllers
             }
         }
 
+        public static string UsingRequestObject
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdentifyOauth2:UsingRequestObject"];
+            }
+        }
+
+        public static string SignRequestObject
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdentifyOauth2:SignRequestObject"];
+            }
+        }
+
         public static string AuthenticationType
         {
             get
