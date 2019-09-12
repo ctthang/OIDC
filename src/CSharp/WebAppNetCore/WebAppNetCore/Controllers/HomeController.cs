@@ -26,13 +26,17 @@ namespace WebAppNetCore.Controllers
         public IActionResult Index()
         {
             ViewData["EditMyProfileUri"] = Configuration.EditMyProfileUri();
-            ViewData["access_token"] = HttpContext.GetTokenAsync("access_token").Result;
+            ViewData[OpenIdConnectConstants.AccessToken] = HttpContext.GetTokenAsync(OpenIdConnectConstants.AccessToken).Result;
 
             ViewData["Origin"] = $"{Request.Scheme}://{Request.Host.Value}";
+            ViewData["CheckSessionIframeUri"] = Configuration.CheckSessionIframeUri();
+
+            var authorizationRequest = OpenIdConnectHelper.GenerateReauthenticateUri(HttpContext, Configuration);
+            ViewData["Reauthenticate"] = authorizationRequest;
 
             return View();
         }
-
+       
         public IActionResult About()
         {
             ViewData["Message"] = "Your application description page.";
@@ -50,6 +54,6 @@ namespace WebAppNetCore.Controllers
         public IActionResult Error()
         {
             return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-        }
+        }    
     }
 }

@@ -1,22 +1,36 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
+using System.Web;
+using HtmlAgilityPack;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json.Linq;
 
 namespace WebAppNetCore.Controllers
 {
     public class AccountController : Controller
     {
+        private IConfiguration configuration;
+        public AccountController(IConfiguration configuration)
+        {
+            this.configuration = configuration;
+        }
         //
         // GET: /Account/SignIn
         [HttpGet]
@@ -32,7 +46,8 @@ namespace WebAppNetCore.Controllers
         public IActionResult SignOut()
         {
             var callbackUrl = Url.Action(nameof(SignedOut), "Account", values: null, protocol: Request.Scheme);
-            return SignOut(new AuthenticationProperties { RedirectUri = callbackUrl },
+            var properties = new AuthenticationProperties { RedirectUri = callbackUrl };
+            return SignOut(properties,
                 CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme);
         }
 
@@ -50,6 +65,13 @@ namespace WebAppNetCore.Controllers
             return View();
         }
 
+        public IActionResult ReauthenticationCallBack()
+        {
+            InitializeDataForRPFrame();
+            ViewData["Action"] = "ReauthenticationCallBack";
+            return View("RPIFrame");
+        }
+
         //
         // GET: /Account/AccessDenied
         [HttpGet]
@@ -58,28 +80,28 @@ namespace WebAppNetCore.Controllers
             return View();
         }
 
-        #region Helpers
-
-        private void AddErrors(IdentityResult result)
+        public ActionResult RPIFrame()
         {
-            foreach (var error in result.Errors)
-            {
-                ModelState.AddModelError(string.Empty, error.Description);
-            }
+            InitializeDataForRPFrame();
+            ViewData["Action"] = "RPIFrame";
+
+            return View();
         }
 
-        private IActionResult RedirectToLocal(string returnUrl)
+        private void InitializeDataForRPFrame()
         {
-            if (Url.IsLocalUrl(returnUrl))
-            {
-                return Redirect(returnUrl);
-            }
-            else
-            {
-                return RedirectToAction(nameof(HomeController.Index), "Home");
-            }
+            var sessionState = HttpContext.User.Claims.Where(x => x.Type == OpenIdConnectConstants.SessionState).Select(x => x.Value).FirstOrDefault();
+            ViewData[OpenIdConnectConstants.ClientId] = configuration.ClientId();
+            ViewData[OpenIdConnectConstants.SessionState] = sessionState;
+            ViewData["OPDomain"] = configuration.IssuerDomain();
+            var authorizationRequest = OpenIdConnectHelper.GenerateReauthenticateUri(HttpContext, configuration);
+            ViewData["Reauthenticate"] = authorizationRequest;
         }
 
-        #endregion
+    }
+    public class AuthorizationResult
+    {
+        public bool IsLoggedOut { get; set; }
+        public string Session { get; set; }
     }
 }
