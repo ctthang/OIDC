@@ -7,6 +7,9 @@ using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Threading.Tasks;
 using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
+using Microsoft.AspNetCore.Http;
 
 namespace WebAppNetCore
 {
@@ -18,11 +21,10 @@ namespace WebAppNetCore
             {
                 options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
                 options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-               
                 options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
             })
             .AddCookie()
-            
+
             .AddOpenIdConnect(connectOptions => InitializeConnectOptions(connectOptions, configuration));
 
             return services;
@@ -30,12 +32,16 @@ namespace WebAppNetCore
 
         private static void InitializeConnectOptions(OpenIdConnectOptions connectOptions, IConfiguration configuration)
         {
-            connectOptions.ClientId = configuration["OpenIdConnectOptions:ClientId"];
-            connectOptions.ClientSecret = configuration["OpenIdConnectOptions:ClientSecret"];
-            connectOptions.ResponseType = configuration["OpenIdConnectOptions:ResponseType"];
+            string accessToken = string.Empty;
+            string sessionState = string.Empty;
+            string idToken = string.Empty;
+
+            connectOptions.ClientId = configuration.ClientId();
+            connectOptions.ClientSecret = configuration.ClientSecret();
+            connectOptions.ResponseType = configuration.ResponseType();
             connectOptions.UseTokenLifetime = true;
             connectOptions.SaveTokens = true;
-            connectOptions.ClaimsIssuer = configuration["OpenIdConnectOptions:ClaimsIssuer"];
+            connectOptions.ClaimsIssuer = configuration.ClaimsIssuer();
             connectOptions.GetClaimsFromUserInfoEndpoint = true;
             connectOptions.Configuration = new OpenIdConnectConfiguration()
             {
@@ -43,8 +49,9 @@ namespace WebAppNetCore
                 TokenEndpoint = configuration.TokenEndpoint(),
                 UserInfoEndpoint = configuration.UserInfoEndpoint(),
                 EndSessionEndpoint = configuration.EndSessionEndpoint(),
-                HttpLogoutSupported = true,
                 
+                HttpLogoutSupported = true,
+
             };
             connectOptions.Events = new OpenIdConnectEvents
             {
@@ -60,7 +67,9 @@ namespace WebAppNetCore
                     Console.WriteLine("IdToken = " + context.TokenEndpointResponse.IdToken);
                     Console.WriteLine("Token = " + context.TokenEndpointResponse.AccessToken);
                     Console.WriteLine("OnTokenResponseReceived.");
-                    
+                    accessToken = context.TokenEndpointResponse.AccessToken;
+                    idToken = context.TokenEndpointResponse.IdToken;
+                    sessionState = context.TokenEndpointResponse.SessionState;
                     await Task.FromResult(0);
                 },
                 OnRemoteFailure = async (context) =>
@@ -76,6 +85,7 @@ namespace WebAppNetCore
                 },
                 OnTicketReceived = async (context) =>
                 {
+                    Console.WriteLine("ConTicketReceived");
                     await Task.FromResult(0);
                 },
                 OnUserInformationReceived = async (context) =>
@@ -84,8 +94,22 @@ namespace WebAppNetCore
                 },
                 OnTokenValidated = async (context) =>
                 {
-                    Console.WriteLine("OnTicketReceived.");
+                    Console.WriteLine("OnTokenValidated.");
                     Console.WriteLine(context.SecurityToken.ToString());
+                    if (accessToken != null)
+                    {
+                        //var token = new JwtSecurityToken(accessToken);
+                        ClaimsIdentity identity = context.Principal.Identity as ClaimsIdentity;
+                        if (identity != null)
+                        {
+                            var claim = new Claim(OpenIdConnectConstants.SessionState, sessionState);
+                            if (!identity.Claims.Any(c => c.Type == OpenIdConnectConstants.SessionState) && claim != null)
+                            {
+                                identity.AddClaim(claim);
+                            }
+                            identity.AddClaim(new Claim(OpenIdConnectConstants.IdToken, idToken));
+                        }
+                    }
                     await Task.FromResult(0);
                 }
             };

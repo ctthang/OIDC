@@ -6,6 +6,26 @@ namespace WebAppNetCore
 {
     public static class ConfigurationExtensions
     {
+        public static string Scope(this IConfiguration configuration)
+        {
+            return configuration["OpenIdConnectOptions:Scope"];
+        }
+        public static string ClientId(this IConfiguration configuration)
+        {
+            return configuration["OpenIdConnectOptions:ClientId"];
+        }
+        public static string ClientSecret(this IConfiguration configuration)
+        {
+            return configuration["OpenIdConnectOptions:ClientSecret"];
+        }
+        public static string ResponseType(this IConfiguration configuration)
+        {
+            return configuration["OpenIdConnectOptions:ResponseType"];
+        }
+        public static string ClaimsIssuer(this IConfiguration configuration)
+        {
+            return configuration["OpenIdConnectOptions:ClaimsIssuer"].TrimEnd('/');
+        }
         public static string IssuerDomain(this IConfiguration configuration)
         {
             return configuration["OpenIdConnectOptions:IssuerDomain"].TrimEnd('/');
@@ -39,6 +59,11 @@ namespace WebAppNetCore
         public static Uri EditMyProfileUri(this IConfiguration configuration)
         {
             return new Uri(configuration["OpenIdConnectOptions:EditMyProfileUri"]);
+        }
+
+        public static Uri CheckSessionIframeUri(this IConfiguration configuration)
+        {
+            return new Uri(configuration["OpenIdConnectOptions:CheckSessionIframeUri"]);
         }
     }
 }
