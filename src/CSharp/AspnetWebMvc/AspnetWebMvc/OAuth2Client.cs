@@ -3,6 +3,7 @@
  * see Thinktecture.IdentityModel.License.txt
  */
 
+using IdentityModel;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -14,6 +15,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Web;
@@ -44,13 +46,14 @@ namespace AspnetWebMvc
                                                         , string responseType
                                                         , string responseMode
                                                         , string maxAge
+                                                        , string codeVerifier
                                                         , string state = null
                                                         , string prompt=null)
         {
             string nonce = Guid.NewGuid().ToString("N");
 
             var result = OAuth2Client.CreateUrl(GenerateAuthorizeEndpoint(authority), clientId, scope, redirectUri, responseType
-                            , responseMode, maxAge, state, prompt, nonce);
+                            , responseMode, maxAge, codeVerifier, state, prompt, nonce);
             if (!string.IsNullOrEmpty(ApplicationSettings.IdTokenHint))
             {
                 result = string.Format("{0}&id_token_hint={1}", result, ApplicationSettings.IdTokenHint);
@@ -58,9 +61,9 @@ namespace AspnetWebMvc
             return result;
         }
 
-        public OAuth2TokenResponse RequestAccessTokenCode(string code, Uri redirectUri)
+        public OAuth2TokenResponse RequestAccessTokenCode(string code, Uri redirectUri, string codeVerifier)
         {
-            HttpResponseMessage result = this._client.PostAsync(GenerateTokenEndpoint(this.uri.AbsoluteUri), (HttpContent)this.GetTokenPostContent(code, redirectUri)).Result;
+            HttpResponseMessage result = this._client.PostAsync(GenerateTokenEndpoint(this.uri.AbsoluteUri), (HttpContent)this.GetTokenPostContent(code, redirectUri, codeVerifier)).Result;
             var response = JsonConvert.DeserializeObject<OAuth2TokenResponse>(result.Content.ReadAsStringAsync().Result);
             return response;
         }
@@ -89,6 +92,7 @@ namespace AspnetWebMvc
                                 , string responseType
                                 , string responseMode
                                 , string maxAge
+                                , string codeVerifier
                                 , string state = null
                                 , string prompt = null
                                 , string nonce = null)
@@ -99,6 +103,25 @@ namespace AspnetWebMvc
                 , ApplicationSettings.UrlEncode(scope)
                 , ApplicationSettings.UrlEncode(redirectUri)
                 , ApplicationSettings.UrlEncode(responseType));
+
+            if (responseType.Contains("code"))
+            {
+                var codeChallengeMethod = ApplicationSettings.CodeChallengeMethod;
+                var codeChallenge = codeVerifier;
+                if (codeChallengeMethod == "S256")
+                {
+                    using (var sha256 = SHA256.Create())
+                    {
+                        var challengeBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(codeVerifier));
+                        codeChallenge = Base64Url.Encode(challengeBytes);
+                    }
+                }
+
+                str = string.Format("{0}&code_challenge={1}&code_challenge_method={2}", str,
+                    ApplicationSettings.UrlEncode(codeChallenge),
+                    ApplicationSettings.UrlEncode(codeChallengeMethod));
+            }
+
             if (ApplicationSettings.UsingRequestObject != "true")
             {
                 if (!string.IsNullOrEmpty(maxAge))
@@ -206,12 +229,13 @@ namespace AspnetWebMvc
             return token;
         }
 
-        protected virtual FormUrlEncodedContent GetTokenPostContent(string code, Uri redirectUri, Dictionary<string, string> additionalProperties = null)
+        protected virtual FormUrlEncodedContent GetTokenPostContent(string code, Uri redirectUri, string codeVerifier, Dictionary<string, string> additionalProperties = null)
         {
             Dictionary<string, string> parameters = GenerateTokenEndpointRequestParameters();
             parameters.Add("grant_type", "authorization_code");
             parameters.Add("redirect_uri", redirectUri.AbsoluteUri);
             parameters.Add("code", code);
+            parameters.Add("code_verifier", codeVerifier);
             return OAuth2Client.CreateForm(parameters);
         }
 

@@ -17,11 +17,12 @@ namespace AspnetWebMvc.Controllers
                 ApplicationSettings.Authority,
                 ApplicationSettings.HybridClientId,
                 ApplicationSettings.Scope,
-                ApplicationSettings.HybridRedirectUri, 
+                ApplicationSettings.HybridRedirectUri,
                 ApplicationSettings.HybridResponseType,
                 string.Empty,
                 ApplicationSettings.MaxAge,
-                ApplicationSettings.State, 
+                ApplicationSettings.CodeVerifier,
+                ApplicationSettings.State,
                 ApplicationSettings.Prompt);
 
             var codeFlowUrl = OAuth2Client.CreateAuthorizationUrl(
@@ -32,6 +33,7 @@ namespace AspnetWebMvc.Controllers
                 "code",
                 ApplicationSettings.ResponseMode,
                 ApplicationSettings.MaxAge,
+                ApplicationSettings.CodeVerifier,
                 ApplicationSettings.State,
                 ApplicationSettings.Prompt);
 
@@ -43,6 +45,7 @@ namespace AspnetWebMvc.Controllers
                ApplicationSettings.ImplicitResponseType,
                ApplicationSettings.ResponseMode,
                ApplicationSettings.MaxAge,
+               string.Empty,
                ApplicationSettings.State,
                ApplicationSettings.Prompt);
 
@@ -63,6 +66,7 @@ namespace AspnetWebMvc.Controllers
             ViewBag.Message = "Code received.";
             ViewBag.ReturnUrl = ApplicationSettings.HybridRedirectUri;
             ViewBag.ClientId = ApplicationSettings.HybridClientId;
+            ViewBag.CodeVerifier = ApplicationSettings.CodeVerifier;
 
             return View("HybridCallback");
         }
@@ -86,6 +90,7 @@ namespace AspnetWebMvc.Controllers
             ViewBag.Message = "Response received.";
             ViewBag.ReturnUrl = ApplicationSettings.CodeFlowRedirectUri;
             ViewBag.ClientId = ApplicationSettings.CodeFlowClientId;
+            ViewBag.CodeVerifier = ApplicationSettings.CodeVerifier;
             if (ApplicationSettings.ResponseMode == "form_post")
             {
                 ViewBag.Code = string.IsNullOrEmpty(response.Code) ? "none" : response.Code;
