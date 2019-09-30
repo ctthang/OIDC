@@ -104,9 +104,9 @@ namespace AspnetWebMvc
                 , ApplicationSettings.UrlEncode(redirectUri)
                 , ApplicationSettings.UrlEncode(responseType));
 
-            if (responseType.Contains("code"))
+            var codeChallengeMethod = ApplicationSettings.CodeChallengeMethod;
+            if (responseType.Contains("code") && codeChallengeMethod.ToLower() != "none")
             {
-                var codeChallengeMethod = ApplicationSettings.CodeChallengeMethod;
                 var codeChallenge = codeVerifier;
                 if (codeChallengeMethod == "S256")
                 {

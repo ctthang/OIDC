@@ -166,14 +166,6 @@ namespace OAuth2ClientSamples.Controllers
             }
         }
 
-        public static string CodeVerifier
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["IdentifyOauth2:CodeVerifier"];
-            }
-        }
-
         public static string UrlEncode(string value)
         {
             if (!string.IsNullOrEmpty(value))
