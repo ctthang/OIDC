@@ -14,6 +14,7 @@ namespace AspnetWebMvc.Controllers
             public string Code { get; set; }
             public string ClientId { get; set; }
             public string ReturnUrl { get; set; }
+            public string CodeVerifier { get; set; }
         }
 
         [HttpPost]
@@ -23,7 +24,8 @@ namespace AspnetWebMvc.Controllers
 
             var response = client.RequestAccessTokenCode(
                 tokenRequest.Code,
-                new Uri(tokenRequest.ReturnUrl));
+                new Uri(tokenRequest.ReturnUrl),
+                tokenRequest.CodeVerifier);
 
             return Json(new { success = true , response });
         }
