@@ -13,15 +13,19 @@ namespace AspnetWebMvc.Controllers
     {
         public ActionResult Index()
         {
+            var codeVerifier = IdentityModel.CryptoRandom.CreateUniqueId(32);
+            Session["codeVerifier"] = codeVerifier;
+
             var hybridUrl = OAuth2Client.CreateAuthorizationUrl(
                 ApplicationSettings.Authority,
                 ApplicationSettings.HybridClientId,
                 ApplicationSettings.Scope,
-                ApplicationSettings.HybridRedirectUri, 
+                ApplicationSettings.HybridRedirectUri,
                 ApplicationSettings.HybridResponseType,
                 string.Empty,
                 ApplicationSettings.MaxAge,
-                ApplicationSettings.State, 
+                codeVerifier,
+                ApplicationSettings.State,
                 ApplicationSettings.Prompt);
 
             var codeFlowUrl = OAuth2Client.CreateAuthorizationUrl(
@@ -32,6 +36,7 @@ namespace AspnetWebMvc.Controllers
                 "code",
                 ApplicationSettings.ResponseMode,
                 ApplicationSettings.MaxAge,
+                codeVerifier,
                 ApplicationSettings.State,
                 ApplicationSettings.Prompt);
 
@@ -43,6 +48,7 @@ namespace AspnetWebMvc.Controllers
                ApplicationSettings.ImplicitResponseType,
                ApplicationSettings.ResponseMode,
                ApplicationSettings.MaxAge,
+               string.Empty,
                ApplicationSettings.State,
                ApplicationSettings.Prompt);
 
@@ -63,6 +69,7 @@ namespace AspnetWebMvc.Controllers
             ViewBag.Message = "Code received.";
             ViewBag.ReturnUrl = ApplicationSettings.HybridRedirectUri;
             ViewBag.ClientId = ApplicationSettings.HybridClientId;
+            ViewBag.CodeVerifier = Session["codeVerifier"];
 
             return View("HybridCallback");
         }
@@ -86,6 +93,7 @@ namespace AspnetWebMvc.Controllers
             ViewBag.Message = "Response received.";
             ViewBag.ReturnUrl = ApplicationSettings.CodeFlowRedirectUri;
             ViewBag.ClientId = ApplicationSettings.CodeFlowClientId;
+            ViewBag.CodeVerifier = Session["codeVerifier"];
             if (ApplicationSettings.ResponseMode == "form_post")
             {
                 ViewBag.Code = string.IsNullOrEmpty(response.Code) ? "none" : response.Code;

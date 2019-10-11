@@ -23,14 +23,15 @@ HttpBearerTokenClient.prototype.get = function (url) {
     return $.ajax(settings);
 };
 
-function GetToken(code, clientId, returnUrl) {
+function GetToken(code, clientId, returnUrl, codeVerifier) {
     $.ajax({
         url: '/Oauth2/GetToken',
         data: JSON.stringify({
             tokenRequest: {
                 Code: code,
                 ClientId: clientId,
-                ReturnUrl: returnUrl
+                ReturnUrl: returnUrl,
+                CodeVerifier: codeVerifier
             }
         }),
         type: 'POST',

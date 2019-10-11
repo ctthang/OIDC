@@ -29,7 +29,6 @@ namespace WebAppNetCore.Controllers
             ViewData[OpenIdConnectConstants.AccessToken] = HttpContext.GetTokenAsync(OpenIdConnectConstants.AccessToken).Result;
 
             ViewData["Origin"] = $"{Request.Scheme}://{Request.Host.Value}";
-            ViewData["CheckSessionIframeUri"] = Configuration.CheckSessionIframeUri();
 
             var authorizationRequest = OpenIdConnectHelper.GenerateReauthenticateUri(HttpContext, Configuration);
             ViewData["Reauthenticate"] = authorizationRequest;
@@ -41,7 +40,13 @@ namespace WebAppNetCore.Controllers
             var callbackUrl = Url.Action("SignedOutCallback", "Account", values: null, protocol: Request.Scheme);
             ViewData["RedirectUrl"] = callbackUrl;
 
-            ViewData["EnableSessionManagement"] = Configuration.SessionManagementEnabled() ? "Yes" : "No";
+            ViewData["EnableSessionManagement"] = "No";
+
+            if (Configuration.EnableSessionManagement())
+            {
+                ViewData["EnableSessionManagement"] = "Yes";
+                ViewData["CheckSessionIframeUri"] = Configuration.CheckSessionIframeUri();
+            }
             return View();
         }
        
