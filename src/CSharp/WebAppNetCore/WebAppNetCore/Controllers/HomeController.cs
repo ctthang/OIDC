@@ -40,11 +40,10 @@ namespace WebAppNetCore.Controllers
             var callbackUrl = Url.Action("SignedOutCallback", "Account", values: null, protocol: Request.Scheme);
             ViewData["RedirectUrl"] = callbackUrl;
 
-            ViewData["EnableSessionManagement"] = "No";
-
+            ViewData["EnableSessionManagement"] = Configuration.EnableSessionManagement() ? "Yes" : "No";
+            ViewData["EnablePostLogout"] = Configuration.EnablePostLogout() ? "Yes" : "No";
             if (Configuration.EnableSessionManagement())
             {
-                ViewData["EnableSessionManagement"] = "Yes";
                 ViewData["CheckSessionIframeUri"] = Configuration.CheckSessionIframeUri();
             }
             return View();
