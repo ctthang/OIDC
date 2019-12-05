@@ -158,6 +158,14 @@ namespace OAuth2ClientSamples.Controllers
             }
         }
 
+        public static string CodeChallengeMethod
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdentifyOauth2:CodeChallengeMethod"];
+            }
+        }
+
         public static string UrlEncode(string value)
         {
             if (!string.IsNullOrEmpty(value))

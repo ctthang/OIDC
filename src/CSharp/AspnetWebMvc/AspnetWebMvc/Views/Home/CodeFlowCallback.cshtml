@@ -11,7 +11,7 @@
     <div>
         <script type='text/javascript'>
             function GetTokenHandler() {
-                GetToken('@ViewBag.Code', '@ViewBag.ClientId', '@ViewBag.ReturnUrl');
+                GetToken('@ViewBag.Code', '@ViewBag.ClientId', '@ViewBag.ReturnUrl', '@ViewBag.CodeVerifier');
                 $("#btnGetToken").hide();
                 $("#btnExchangeToken").show();
             }

@@ -26,13 +26,28 @@ namespace WebAppNetCore.Controllers
         public IActionResult Index()
         {
             ViewData["EditMyProfileUri"] = Configuration.EditMyProfileUri();
-            ViewData["access_token"] = HttpContext.GetTokenAsync("access_token").Result;
+            ViewData[OpenIdConnectConstants.AccessToken] = HttpContext.GetTokenAsync(OpenIdConnectConstants.AccessToken).Result;
 
             ViewData["Origin"] = $"{Request.Scheme}://{Request.Host.Value}";
 
+            var authorizationRequest = OpenIdConnectHelper.GenerateReauthenticateUri(HttpContext, Configuration);
+            ViewData["Reauthenticate"] = authorizationRequest;
+
+            ViewData["EndSessionUri"] = Configuration.EndSessionEndpoint();
+            ViewData["IdTokenHint"] = HttpContext.GetTokenAsync(OpenIdConnectConstants.IdToken).Result;
+
+            var callbackUrl = Url.Action("SignedOutCallback", "Account", values: null, protocol: Request.Scheme);
+            ViewData["RedirectUrl"] = callbackUrl;
+
+            ViewData["EnableSessionManagement"] = Configuration.EnableSessionManagement() ? "Yes" : "No";
+            ViewData["EnablePostLogout"] = Configuration.EnablePostLogout() ? "Yes" : "No";
+            if (Configuration.EnableSessionManagement())
+            {
+                ViewData["CheckSessionIframeUri"] = Configuration.CheckSessionIframeUri();
+            }
             return View();
         }
-
+       
         public IActionResult About()
         {
             ViewData["Message"] = "Your application description page.";
@@ -50,6 +65,6 @@ namespace WebAppNetCore.Controllers
         public IActionResult Error()
         {
             return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-        }
+        }    
     }
 }

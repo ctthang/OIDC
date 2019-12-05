@@ -48,7 +48,7 @@
                 var token = params.access_token;
                 log("#authorizationRequestResult", "accesstokenid","Access Token Obtained: ", token);
 
-                GetToken(code, '@ViewBag.ClientId', '@ViewBag.ReturnUrl');
+                GetToken(code, '@ViewBag.ClientId', '@ViewBag.ReturnUrl', '@ViewBag.CodeVerifier');
             });
 
         </script>
