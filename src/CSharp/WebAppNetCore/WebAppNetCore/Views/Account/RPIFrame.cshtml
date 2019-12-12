@@ -21,7 +21,7 @@
         
         var client_id = "@Html.Raw(ViewData["clientId"])";
         var session_state = "@Html.Raw(ViewData["session_state"])";
-        var mes = client_id + "########" + session_state;
+        var mes = client_id + " " + session_state;
 
         var opDomain = "@ViewData["OPDomain"]";
 
@@ -47,7 +47,7 @@
             var idtoken = params.id_token;            
             window.parent.document.getElementById('notice').innerHTML = "Callback id_token..." + idtoken;
             session_state = params.session_state;
-            mes = client_id + "########" + session_state;
+            mes = client_id + " " + session_state;
         }
 
         function check_session() {
