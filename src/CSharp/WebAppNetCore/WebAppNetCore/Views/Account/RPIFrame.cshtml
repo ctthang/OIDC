@@ -11,7 +11,7 @@
 
     <script language="JavaScript" type="text/javascript">
         var stat = "unchanged";
-        var shouldLogout = false;
+        var errorAction = '';
         var callback = false;
 
         var action = "@ViewData["Action"]";
@@ -41,7 +41,7 @@
             }
 
             if (params.error) {
-                shouldLogout = true;
+                errorAction = params.error === 'login_required' ? 'relogin' : 'logout';
                 return;
             }
             var idtoken = params.id_token;            
@@ -56,10 +56,11 @@
         }
 
         function setTimer() {
-            if (shouldLogout) {
-                window.parent.location = "@Url.Action("SignOut", "Account")";
+            if (errorAction !== '') {
+                window.parent.location = errorAction === 'relogin' ? "@Url.Action("SignIn", "Account")" : "@Url.Action("SignedOutCallback", "Account")";
                 return;
-            }
+            } 
+
             window.parent.document.getElementById('notice').innerHTML = "Checking OP Session Status...";
             setTimeout(function () {
                 checkSessionInterval = setInterval("check_session()", 3 * 1000);
