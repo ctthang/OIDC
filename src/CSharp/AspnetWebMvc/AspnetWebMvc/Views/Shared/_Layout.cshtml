@@ -7,6 +7,8 @@
     <meta name="viewport" content="width=device-width" />
     @Styles.Render("~/Content/css")
     @Scripts.Render("~/bundles/modernizr")
+    @Scripts.Render("~/bundles/jquery")
+    @RenderSection("scripts", required: false)
     <script src="~/Scripts/bootstrap.min.js"></script>
 </head>
 <body>
@@ -48,8 +50,5 @@
         </div>
     </div>
 
-
-    @Scripts.Render("~/bundles/jquery")
-    @RenderSection("scripts", required: false)
 </body>
 </html>
