@@ -47,13 +47,14 @@ namespace AspnetWebMvc
                                                         , string responseMode
                                                         , string maxAge
                                                         , string codeVerifier
+                                                        , string whr
                                                         , string state = null
                                                         , string prompt=null)
         {
             string nonce = Guid.NewGuid().ToString("N");
 
             var result = OAuth2Client.CreateUrl(GenerateAuthorizeEndpoint(authority), clientId, scope, redirectUri, responseType
-                            , responseMode, maxAge, codeVerifier, state, prompt, nonce);
+                            , responseMode, maxAge, codeVerifier, whr, state, prompt, nonce);
             if (!string.IsNullOrEmpty(ApplicationSettings.IdTokenHint))
             {
                 result = string.Format("{0}&id_token_hint={1}", result, ApplicationSettings.IdTokenHint);
@@ -93,6 +94,7 @@ namespace AspnetWebMvc
                                 , string responseMode
                                 , string maxAge
                                 , string codeVerifier
+                                , string whr
                                 , string state = null
                                 , string prompt = null
                                 , string nonce = null)
@@ -144,6 +146,10 @@ namespace AspnetWebMvc
                 {
                     str = string.Format("{0}&nonce={1}", str, ApplicationSettings.UrlEncode(nonce));
                 }
+                if (!string.IsNullOrWhiteSpace(whr))
+                {
+                    str = string.Format("{0}&whr={1}", str, ApplicationSettings.UrlEncode(whr));
+                }
             }
             else
             {
@@ -157,7 +163,7 @@ namespace AspnetWebMvc
                 claimsIdentify.AddClaim(new Claim("state", state));
                 claimsIdentify.AddClaim(new Claim("prompt", prompt));
                 claimsIdentify.AddClaim(new Claim("nonce", nonce));
-
+                claimsIdentify.AddClaim(new Claim("whr", whr));
                 string token;
                 if (ApplicationSettings.SignRequestObject == "true")
                 {

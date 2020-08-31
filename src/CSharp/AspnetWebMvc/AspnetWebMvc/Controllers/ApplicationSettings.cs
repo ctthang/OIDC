@@ -158,6 +158,14 @@ namespace OAuth2ClientSamples.Controllers
             }
         }
 
+        public static string Whr
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdentifyOauth2:Whr"];
+            }
+        }
+
         public static string CodeChallengeMethod
         {
             get
