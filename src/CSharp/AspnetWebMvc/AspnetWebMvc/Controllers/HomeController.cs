@@ -25,6 +25,7 @@ namespace AspnetWebMvc.Controllers
                 string.Empty,
                 ApplicationSettings.MaxAge,
                 codeVerifier,
+                ApplicationSettings.Whr,
                 ApplicationSettings.State,
                 ApplicationSettings.Prompt);
 
@@ -37,6 +38,7 @@ namespace AspnetWebMvc.Controllers
                 ApplicationSettings.ResponseMode,
                 ApplicationSettings.MaxAge,
                 codeVerifier,
+                ApplicationSettings.Whr,
                 ApplicationSettings.State,
                 ApplicationSettings.Prompt);
 
@@ -49,6 +51,7 @@ namespace AspnetWebMvc.Controllers
                ApplicationSettings.ResponseMode,
                ApplicationSettings.MaxAge,
                string.Empty,
+               ApplicationSettings.Whr,
                ApplicationSettings.State,
                ApplicationSettings.Prompt);
 
