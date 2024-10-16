@@ -33,22 +33,22 @@ namespace WebAppNetCore
 
         public static string AuthorizationEndpoint(this IConfiguration configuration)
         {
-            return configuration.IssuerDomain() + "/runtime/oauth2/authorize.idp";
+            return configuration["OpenIdConnectOptions:AuthnEndpoint"];
         }
 
         public static string TokenEndpoint(this IConfiguration configuration)
         {
-            return configuration.IssuerDomain() + "/runtime/oauth2/token.idp";
+            return configuration["OpenIdConnectOptions:TokenEndpoint"];
         }
 
         public static string UserInfoEndpoint(this IConfiguration configuration)
         {
-            return configuration.IssuerDomain() + "/runtime/openidconnect/userinfo.idp";
+            return configuration["OpenIdConnectOptions:UserInfoEndpoint"];
         }
 
         public static string EndSessionEndpoint(this IConfiguration configuration)
         {
-            return configuration.IssuerDomain() + "/runtime/openidconnect/logout.idp";
+            return configuration["OpenIdConnectOptions:EndSessionEndpoint"];
         }
 
         public static X509Certificate2 IssuerSigningKey(this IConfiguration configuration)
@@ -79,6 +79,11 @@ namespace WebAppNetCore
         public static bool RequireNonce(this IConfiguration configuration)
         {
             return bool.Parse(configuration["OpenIdConnectOptions:RequireNonce"]);
+        }
+
+        public static bool SendArcToIdp(this IConfiguration configuration)
+        {
+            return bool.Parse(configuration["OpenIdConnectOptions:SendArcToIdp"]);
         }
 
         public static bool EnableSessionManagement(this IConfiguration configuration)

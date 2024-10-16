@@ -114,7 +114,8 @@ namespace WebAppNetCore
                 },
                 OnRedirectToIdentityProvider = async (context) =>
                 {
-                    context.ProtocolMessage.AcrValues = "urn:dk:gov:saml:attribute:AssuranceLevel:2 urn:dk:gov:saml:attribute:AssuranceLevel:3";
+                    if(configuration.SendArcToIdp())
+                        context.ProtocolMessage.AcrValues = "urn:dk:gov:saml:attribute:AssuranceLevel:2 urn:dk:gov:saml:attribute:AssuranceLevel:3";
                     await Task.FromResult(0);
                 }
             };
