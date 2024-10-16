@@ -164,6 +164,7 @@ namespace AspnetWebMvc
                 claimsIdentify.AddClaim(new Claim("prompt", prompt));
                 claimsIdentify.AddClaim(new Claim("nonce", nonce));
                 claimsIdentify.AddClaim(new Claim("whr", whr));
+                claimsIdentify.AddClaim(new Claim("acr_values", "urn:dk:gov:saml:attribute:AssuranceLevel:2"));
                 string token;
                 if (ApplicationSettings.SignRequestObject == "true")
                 {

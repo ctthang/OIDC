@@ -166,6 +166,14 @@ namespace OAuth2ClientSamples.Controllers
             }
         }
 
+        public static string Acr
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdentifyOauth2:Acr"];
+            }
+        }
+
         public static string CodeChallengeMethod
         {
             get
