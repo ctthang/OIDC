@@ -286,3 +286,4 @@ __pycache__/
 *.btm.cs
 *.odx.cs
 *.xsd.cs
+/src/CSharp/WebAppNetCore/WebAppNetCore/.config/dotnet-tools.json
