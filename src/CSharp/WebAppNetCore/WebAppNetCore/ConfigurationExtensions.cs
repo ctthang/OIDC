@@ -22,6 +22,10 @@ namespace WebAppNetCore
         {
             return configuration["OpenIdConnectOptions:ResponseType"];
         }
+        public static string ResponseMode(this IConfiguration configuration)
+        {
+            return configuration["OpenIdConnectOptions:ResponseMode"];
+        }
         public static string ClaimsIssuer(this IConfiguration configuration)
         {
             return configuration["OpenIdConnectOptions:ClaimsIssuer"].TrimEnd('/');
@@ -74,6 +78,11 @@ namespace WebAppNetCore
                 return null;
             }
             return new Uri(sessionUri);
+        }
+
+        public static bool UsePKCE(this IConfiguration configuration)
+        {
+            return configuration["OpenIdConnectOptions:UsePKCE"] == "true";
         }
 
         public static bool RequireNonce(this IConfiguration configuration)

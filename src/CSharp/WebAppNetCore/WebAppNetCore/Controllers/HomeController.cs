@@ -64,7 +64,8 @@ namespace WebAppNetCore.Controllers
 
         public IActionResult Error()
         {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+            var message = HttpContext.Items["RemoteError"]?.ToString();
+            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier, Message = message });
         }    
     }
 }

@@ -43,6 +43,18 @@ namespace WebAppNetCore
             connectOptions.SaveTokens = true;
             connectOptions.ClaimsIssuer = configuration.ClaimsIssuer();
             connectOptions.GetClaimsFromUserInfoEndpoint = true;
+            connectOptions.UsePkce = configuration.UsePKCE();
+
+            var responseMode = configuration.ResponseMode();
+            if(string.IsNullOrEmpty(responseMode))
+            {
+                connectOptions.ResponseMode = null;
+            }
+            else
+            {
+                connectOptions.ResponseMode = responseMode;
+            }
+
             connectOptions.Configuration = new OpenIdConnectConfiguration()
             {
                 AuthorizationEndpoint = configuration.AuthorizationEndpoint(),
@@ -74,6 +86,7 @@ namespace WebAppNetCore
                 },
                 OnRemoteFailure = async (context) =>
                 {
+                    context.HttpContext.Items.Add("RemoteError", context.Failure.ToString());
                     Console.WriteLine("OnRemoteFailure.");
                     Console.WriteLine(context.Failure.ToString());
 
