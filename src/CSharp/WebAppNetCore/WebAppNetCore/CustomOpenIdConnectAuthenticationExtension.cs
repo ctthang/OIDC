@@ -7,9 +7,10 @@ using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Threading.Tasks;
 using System.Security.Claims;
-using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
-using Microsoft.AspNetCore.Http;
+using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
+using Microsoft.IdentityModel.Logging;
 
 namespace WebAppNetCore
 {
@@ -17,6 +18,7 @@ namespace WebAppNetCore
     {
         public static IServiceCollection ConfigureOpenIdServices(this IServiceCollection services, IConfiguration configuration)
         {
+            IdentityModelEventSource.ShowPII = true;
             services.AddAuthentication(options =>
             {
                 options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
@@ -135,7 +137,11 @@ namespace WebAppNetCore
                 connectOptions.Scope.Add(scope);
             }
 
-            connectOptions.TokenValidationParameters.IssuerSigningKey = new X509SecurityKey(configuration.IssuerSigningKey());
+            var signingKey = configuration.IssuerSigningKey();
+            connectOptions.TokenValidationParameters.IssuerSigningKeys = new List<SecurityKey> {
+                new RsaSecurityKey(signingKey.GetRSAPublicKey().ExportParameters(false)),
+                new X509SecurityKey(signingKey)
+            };
             connectOptions.TokenValidationParameters.ValidateAudience = true;   // by default, when we don't explicitly set ValidAudience, it is set to ClientId
             connectOptions.TokenValidationParameters.ValidateIssuer = true;
             connectOptions.TokenValidationParameters.ValidIssuer = configuration.ClaimsIssuer();
