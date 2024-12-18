@@ -117,10 +117,14 @@ namespace WebAppNetCore
                         ClaimsIdentity identity = context.Principal.Identity as ClaimsIdentity;
                         if (identity != null)
                         {
-                            var claim = new Claim(OpenIdConnectConstants.SessionState, sessionState);
-                            if (!identity.Claims.Any(c => c.Type == OpenIdConnectConstants.SessionState) && claim != null)
+                            Claim sessionStateClaim = null;
+                            if (!string.IsNullOrEmpty(sessionState))
                             {
-                                identity.AddClaim(claim);
+                                sessionStateClaim = new Claim(OpenIdConnectConstants.SessionState, sessionState);
+                            }
+                            if (!identity.Claims.Any(c => c.Type == OpenIdConnectConstants.SessionState) && sessionStateClaim != null)
+                            {
+                                identity.AddClaim(sessionStateClaim);
                             }
                             identity.AddClaim(new Claim(OpenIdConnectConstants.IdToken, idToken));
                         }
