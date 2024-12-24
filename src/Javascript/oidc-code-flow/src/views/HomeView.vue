@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { authService } from './../authService';  // Ensure this imports your authService
-import SessionIframe from './../components/SessionIframe.vue';
 
 const user = ref<any>(null);
 const accessToken = ref<string | null>(null);
@@ -12,9 +11,6 @@ const idTokenHeader = ref<any>(null);
 const idTokenPayload = ref<any>(null);
 const selectedSecurityLevel = ref<string>('');
 
-const clientId = import.meta.env.VITE_OAUTH_CLIENT_ID;
-const opDomain = import.meta.env.VITE_OAUTH_OP_DOMAIN;
-const checkSessionIframeUri = import.meta.env.VITE_OAUTH_CHECK_SESSION_IFRAME_URI;
 
 const securityLevels = [
   "https://data.gov.dk/concept/core/nsis/loa/High",
@@ -142,13 +138,6 @@ onMounted(async () => {
           <p class="token">{{ idTokenPayload }}</p>
         </div>
       </div>
-
-      <SessionIframe 
-        :check-session-iframe-uri="checkSessionIframeUri"
-        :client-id="clientId"
-        :op-domain="opDomain"
-        :session-state="user?.session_state"
-      />
     </div>
 
     

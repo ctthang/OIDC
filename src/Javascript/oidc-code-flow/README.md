@@ -13,22 +13,16 @@ The application is built using the [`oidc-client`](https://www.npmjs.com/package
 All settings are stored in the `.env` file as follows:
 
 - **`VITE_OAUTH_AUTHORITY`**: The URL of the OIDC/OAuth2 provider (e.g., `https://your-identity-provider.com/oauth2`).
-- **`VITE_OAUTH_OP_DOMAIN`**: The domain of the Identify service (e.g., `https://your-identity-provider.com`).
-- **`VITE_OAUTH_CHECK_SESSION_IFRAME_URI`**: The URL for checking the session state in Identify (e.g., `https://your-identity-provider.com/runtime/openidconnect/sessionlogout.idp`).
 - **`VITE_OAUTH_CLIENT_ID`**: The unique client identifier for your application, as registered with the OIDC/OAuth2 provider.
 - **`VITE_OAUTH_SCOPE`**: The scope requested from the OIDC/OAuth2 provider (e.g., `openid`, default is `'openid'`).
-- **`VITE_OAUTH_CLIENT_SECRET`**: The client secret for your application, as registered with the OIDC/OAuth2 provider.
 
 #### Production deployment 
 
 Assuming the SPA is deployed at `https://spa-oidc.safewhere.local` and the Identify OAuth service is at `https://develop.safewhere.local/runtime/`, the settings would look like this:  
 
 - **`VITE_OAUTH_AUTHORITY`**: https://develop.safewhere.local/runtime/oauth2 
-- **`VITE_OAUTH_OP_DOMAIN`**: https://develop.safewhere.local  
-- **`VITE_OAUTH_CHECK_SESSION_IFRAME_URI`**: https://develop.safewhere.local/runtime/openidconnect/sessionlogout.idp  
 - **`VITE_OAUTH_CLIENT_ID`**: *(The client ID for the application as set up in Identify)*  
 - **`VITE_OAUTH_SCOPE`**: `openid` *(must include the `openid` scope)*  
-- **`VITE_OAUTH_CLIENT_SECRET`**: *(The client secret for the application as set up in Identify)*  
 
 For production, you need to build the SPA and deploy the output in the `dist` folder to your hosting environment.  
 

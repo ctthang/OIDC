@@ -7,18 +7,16 @@ const settings = {
     post_logout_redirect_uri: `${window.location.origin}`,
     response_type: "code",
     scope: import.meta.env.VITE_OAUTH_SCOPE || "openid",
-    client_secret: import.meta.env.VITE_OAUTH_CLIENT_SECRET,
-    monitorSession: false,
+    monitorSession: true,
     automaticSilentRenew: true,
     userStore: new Oidc.WebStorageStateStore({
-      store: window.sessionStorage,
+        store: window.sessionStorage,
     }),
 };
-  
+    
 class CustomUserManager extends UserManager {
     _signinStart(args, navigator, navigatorParams = {}) {
         return navigator.prepare(navigatorParams).then(handle => {
-
             return this.createSigninRequest(args).then(signinRequest => {
                 let url = new URL(signinRequest.url);
                 url.searchParams.delete("response_mode");
@@ -52,6 +50,14 @@ class CustomUserManager extends UserManager {
 class AuthService {
     constructor() {
         this.userManager = new CustomUserManager(settings);
+        this.setupEventListeners();
+    }
+
+    setupEventListeners() {
+        this.userManager.events.addUserSignedOut(async () => {
+            console.log("User signed out event triggered.");
+            await this.logout();
+        });
     }
 
     async login() {
