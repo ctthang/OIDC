@@ -14,8 +14,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // JWT authentication with certificate validation and cnf claim check
-var authority = builder.Configuration["Jwt:Authority"] ?? "https://your-tenant.domain/";
-var audience = builder.Configuration["Jwt:Audience"] ?? "api1";
+var authority = builder.Configuration["Jwt:Authority"] ?? "";
+var audience = builder.Configuration["Jwt:Audience"] ?? "";
 
 // Load the public key/certificate for signature validation
 var certPath = builder.Configuration["Jwt:Certificate:Path"];
