@@ -1,0 +1,95 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home page";
+}
+
+<style>
+.token-box {
+    word-break: break-all;
+    white-space: pre-wrap;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    padding: 8px;
+    margin-bottom: 10px;
+    font-family: monospace;
+    max-width: 100%;
+}
+.api-result {
+    margin-top: 20px;
+    padding: 8px;
+    background: #e9ecef;
+    border: 1px solid #ccc;
+    min-height: 32px;
+}
+.cert-input {
+    width: 100%;
+    min-height: 40px;
+    font-family: monospace;
+    margin-bottom: 10px;
+}
+</style>
+
+<div class="text-center">
+    <h1 class="display-4">Welcome</h1>
+    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+</div>
+
+@if (User.Identity?.IsAuthenticated ?? false)
+{
+    <h2>Welcome, @User.Identity.Name!</h2>
+    <p>You are logged in via OIDC with mTLS token endpoint.</p>
+    <div>
+        <strong>Access Token:</strong>
+        <div class="token-box" id="accessToken">@Model.AccessToken</div>
+    </div>
+    <div>
+        <strong>Identity Token:</strong>
+        <div class="token-box" id="identityToken">@Model.IdentityToken</div>
+    </div>
+    <div>
+        <label for="clientCert">Client Certificate (base64 DER):</label>
+        <textarea id="clientCert" class="cert-input" placeholder="Paste your base64-encoded client certificate here"></textarea>
+    </div>
+    <button id="callApiBtn" type="button">Call HelloWorld API</button>
+    <div class="api-result" id="apiResult"></div>
+    <form method="post" asp-page="/Login" asp-page-handler="Logout">
+        <button type="submit">Logout</button>
+    </form>
+}
+else
+{
+    <a href="/Login">Login</a>
+}
+
+<script>
+    const helloWorldApiUrl = '@Model.HelloWorldApiUrl';
+    document.addEventListener('DOMContentLoaded', function() {
+        const btn = document.getElementById('callApiBtn');
+        if (btn) {
+            btn.addEventListener('click', async function() {
+                const accessToken = document.getElementById('accessToken').innerText.trim();
+                const clientCert = document.getElementById('clientCert').value.trim();
+                const apiResult = document.getElementById('apiResult');
+                apiResult.textContent = 'Calling API...';
+                try {
+                    const response = await fetch(helloWorldApiUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'X-Client-Cert': clientCert
+                        }
+                    });
+                    if (response.ok) {
+                        const text = await response.text();
+                        apiResult.textContent = text;
+                    } else {
+                        apiResult.textContent = `Error: ${response.status} ${response.statusText}`;
+                    }
+                } catch (err) {
+                    apiResult.textContent = 'Request failed: ' + err;
+                }
+            });
+        }
+    });
+</script>
