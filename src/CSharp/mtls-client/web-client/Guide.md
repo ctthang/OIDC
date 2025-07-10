@@ -29,22 +29,121 @@ Configuration steps to Ctr-F5 run the solution locally:
 - A client certificate in PFX format for mTLS authentication (with private key).
 - A public certificate for the web-api to validate the JWT signature and the `cnf` claim.
 
-### 1. Configure the web-client
+#### Additional setup on web server 
+ 
+Add the 2 following registry keys to your Identify server in case they haven't been added before: 
+
+1. Open the registry on Identify server. 
+2. Go to: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL
+   - Add the key: "SendTrustedIssuerList" (DWORD) with the value: 0. In case this key exists, set it 0  
+   - Add the key: "ClientAuthTrustMode" (DWORD) with the value: 2. In case this key exists, set it 2   
+
+3. Exit the registry and reset the Identify server   
+4. Reboot the Identify server 
+
+#### Disable client certificate revocation at IIS 
+
+This step is needed when we use client certificates from self-signed CAs. Therefore, we need to disable Client Certificate Revocation at the IIS level. In this sample, my Identify site is identify01.identify.safewhere.com
+
+1. Run the CMD as Administrator
+2. Run this command line:
+
+```powershell
+netsh http show sslcert
+```
+
+3. Verify the value for "Verify Client Certificate Revocation". If it's "Enabled", we need to go to the next step.
+4. Backup the certificate Hash and hostname:port  
+5. Delete the existing binding with the next command line:
+
+```powershell
+netsh http delete sslcert hostnameport=identify.example.com:443
+```
+
+6. Add the binding again using netsh as shown below:
+
+```powershell
+netsh http add sslcert hostnameport=identify.example.com:443 certhash=0fbabd59cbfc2e478ff5b629463cd0fd06b23d66 appid={4dc3e181-e14b-4a21-b022-59fc669b0914} certstorename=My verifyclientcertrevocation=disable
+```
+7. Run this command line:
+
+```powershell
+netsh http show sslcert
+```
+
+to verify the value at "Verify Client Certificate Revocation". They must be disabled. 
+
+8. Import the public key of self-signed CAs to **LocalMachine\Trusted Root Certificate Authority**.
+
+### Generate the client jwks for the client Certificate
+
+Given that you have a client certificate with .pfx format.
+
+Follow the steps:
+
+1. Extract public key from PFX:
+
+```bash
+openssl pkcs12 -in client.pfx -clcerts -nokeys -out client-cert.pem
+```
+
+2. Generate the kid value from the public key
+
+```bash
+openssl x509 -in client-cert.pem -outform DER | openssl dgst -sha1 -binary | base64 | tr '+/' '-_' | tr -d '='
+```
+
+3. Convert PEM to JWK:
+
+- Go to [jwkset.com/generate](https://jwkset.com/generate), paste your PEM certificate.
+- Input the kid value collected from previous step.
+- Select **RS256** under the **Key algorithm** dropdown list.
+- Select **Signature** under the **Key use** dropdown list
+- Press **Generate** button.
+ 
+Here is JSON Web Key example:
+
+```JSON
+{
+    "kty": "RSA",
+    "use": "sig",
+    "alg": "RS256",
+    "kid": "your-key-id",
+    "x5c": [
+        "base64-cert"
+    ],
+    "x5t": "your-key-id",
+    "x5t#S256": "AbrsA....w_g",
+    "n": "base64url-modulus",
+    "e": "AQAB"
+}
+```
+
+### Configure the web-client
+
 1. Prepare your OAuth/OIDC connection in Identify Tenant
-   - Create a new OIDC client in your Identify Tenant with the following settings:
-	 - **Client ID**: Your application client ID
+
+   Log in **Admin UI portal**. Create a new OIDC client in your Identify Tenant with the following settings:
+   - Connection tab:
+   	 - **Client ID**: Your application client ID
 	 - **Client Secret**: Your application client secret
+     - **Client jwks**: input its JWK format as generate above
+     - **Allowed Callback URIs**: `http://localhost:5254/signin-oidc`
+     - **Post Logout Redirect URI**: `http://localhost:5254/signout-callback-oidc`
+     - **Security token audiences**: `https://localhost:7102/` 
+
+
+   - Security tab:
+     - **JWS algorithm**: `RSASigning`
      - **Allow Http Redirects**: Enabled
-	 - **Allow Code Flow**: Enabled
-	 - **Redirect URI**: `http://localhost:5254/signin-oidc`
-	 - **Post Logout Redirect URI**: `http://localhost:5254/signout-callback-oidc`
-	 - **Security token audiences**: `https://localhost:7102/` 
+     - **Allow Code Flow**: Enabled
 
 2. Place your client certificate (PFX) in a secure location and update the path and password in configuration.
 3. Update `appsettings.json` in the web-client project with your Identify Tenant details:
 
-1. "OIDC": {
-      "IdentifyTenantDomain": "identify.example.com",
+```JSON
+"OIDC": {
+      "Authority": "https://identify.example.com/runtime/oauth2",
       "ClientId": "[Your client Id]",
       "CallbackPath": "/signin-oidc",
       "Certificate": {
@@ -52,11 +151,14 @@ Configuration steps to Ctr-F5 run the solution locally:
         "Password": "[the certificate password]"
       }
     }
+```
+Api configuration:
 
-Api configuration:"Api": {
+```JSON
+"Api": {
     "HelloWorldUrl": "https://localhost:7102/HelloWorld"
   }
-
+```
 Just keep it as it is, this is the default API endpoint when running locally.
 
 4. Run the web-client:dotnet run --project ./web-client/web-client.csproj
@@ -64,6 +166,8 @@ Just keep it as it is, this is the default API endpoint when running locally.
 
 ### 2. Configure the web-api
 1. Update `appsettings.json` in the web-api project with your JWT authority, audience, and the path to the public certificate for signature and the `cnf` claim validation.
+
+```JSON
 "Jwt": {
     "Authority": "https://identify.example.com/runtime/oauth2",
     "Audience": "https://localhost:7102/",
@@ -71,6 +175,8 @@ Just keep it as it is, this is the default API endpoint when running locally.
       "Path": "[Full path to the public certificate to validate the signature and the `cnf` claim]"
     }
   }
+```
+
 2. Run the web-api:dotnet run --project ./web-api/web-api.csproj
 As a result , the web-api will start on `https://localhost:7102`. (see the configuration in `launchSettings.json`)
 
