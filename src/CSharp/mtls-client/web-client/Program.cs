@@ -3,17 +3,19 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using System.Security.Cryptography.X509Certificates;
 using IdentityModel.Client;
+using web_client;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+builder.Services.AddControllers(); // Add controllers support
 
 // Load OIDC/mTLS config
 dynamic oidcConfig = builder.Configuration.GetSection("Authentication:OIDC");
-string authority = oidcConfig["Authority"] ?? "";
-string tokenEndpoint = oidcConfig["TokenEndpoint"] ?? "";
-string configEndpoint = oidcConfig["ConfigurationEndpoint"] ?? "";
+var identifyDomain = oidcConfig["IdentifyTenantDomain"] ?? "";
+string tokenEndpoint = $"https://{identifyDomain}/runtime/oauth2/mtls/token.idp";
+string configEndpoint = $"https://{identifyDomain}/runtime/oauth2/.well-known/openid-configuration";
 string clientId = oidcConfig["ClientId"] ?? "";
 string callbackPath = oidcConfig["CallbackPath"] ?? "/signin-oidc";
 string certPath = oidcConfig.GetSection("Certificate")["Path"] ?? "";
@@ -23,6 +25,7 @@ X509Certificate2? clientCert = null;
 if (!string.IsNullOrEmpty(certPath))
 {
     clientCert = new X509Certificate2(certPath, certPassword);
+    ConfigurationData.ClientCertificate = clientCert;
 }
 
 builder.Services.AddAuthentication(options =>
@@ -33,15 +36,7 @@ builder.Services.AddAuthentication(options =>
 .AddCookie()
 .AddOpenIdConnect(options =>
 {
-    // Use ConfigurationEndpoint if provided
-    if (!string.IsNullOrEmpty(configEndpoint))
-    {
-        options.MetadataAddress = configEndpoint;
-    }
-    else
-    {
-        options.Authority = authority;
-    }
+    options.MetadataAddress = configEndpoint;
     options.ClientId = clientId;
     options.CallbackPath = callbackPath;
     options.UsePkce = true;
@@ -68,7 +63,6 @@ builder.Services.AddAuthentication(options =>
                 ClientId = clientId,
                 Code = ctx.ProtocolMessage.Code,
                 RedirectUri = ctx.Properties.Items[OpenIdConnectDefaults.RedirectUriForCodePropertiesKey],
-                // Use the correct PKCE code verifier key
                 CodeVerifier = ctx.TokenEndpointRequest.Parameters["code_verifier"]
             };
             parameters.Parameters.Add("client_id", clientId);
@@ -100,5 +94,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapRazorPages();
+app.MapControllers(); // Map controllers
 
 app.Run();
