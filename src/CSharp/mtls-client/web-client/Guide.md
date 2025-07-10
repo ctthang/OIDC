@@ -25,7 +25,7 @@ Configuration steps to Ctr-F5 run the solution locally:
 
 ### Prerequisites
 - .NET 8 SDK installed
-- A valid Identify Tenant setup with mTLS support, and lets say `https://your-tenant.domain/`. Search and replace `your-tenant.domain` with your actual tenant domain.
+- A valid Identify Tenant setup with mTLS support, and lets say `https://identify.example.com/`. Search and replace `identify.example.com` with your actual tenant domain.
 - A client certificate in PFX format for mTLS authentication (with private key).
 - A public certificate for the web-api to validate the JWT signature and the `cnf` claim.
 
@@ -44,7 +44,7 @@ Configuration steps to Ctr-F5 run the solution locally:
 3. Update `appsettings.json` in the web-client project with your Identify Tenant details:
 
 1. "OIDC": {
-      "IdentifyTenantDomain": "your-tenant.domain",
+      "IdentifyTenantDomain": "identify.example.com",
       "ClientId": "[Your client Id]",
       "CallbackPath": "/signin-oidc",
       "Certificate": {
@@ -65,7 +65,7 @@ Just keep it as it is, this is the default API endpoint when running locally.
 ### 2. Configure the web-api
 1. Update `appsettings.json` in the web-api project with your JWT authority, audience, and the path to the public certificate for signature and the `cnf` claim validation.
 "Jwt": {
-    "Authority": "https://your-tenant.domain/runtime/oauth2",
+    "Authority": "https://identify.example.com/runtime/oauth2",
     "Audience": "https://localhost:7102/",
     "Certificate": {
       "Path": "[Full path to the public certificate to validate the signature and the `cnf` claim]"

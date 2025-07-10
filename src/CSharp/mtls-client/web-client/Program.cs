@@ -12,10 +12,10 @@ builder.Services.AddRazorPages();
 builder.Services.AddControllers(); // Add controllers support
 
 // Load OIDC/mTLS config
-dynamic oidcConfig = builder.Configuration.GetSection("Authentication:OIDC");
-var identifyDomain = oidcConfig["IdentifyTenantDomain"] ?? "";
-string tokenEndpoint = $"https://{identifyDomain}/runtime/oauth2/mtls/token.idp";
-string configEndpoint = $"https://{identifyDomain}/runtime/oauth2/.well-known/openid-configuration";
+var oidcConfig = builder.Configuration.GetSection("Authentication:OIDC");
+var authority = oidcConfig["Authority"] ?? "";
+string tokenEndpoint = $"{authority}/mtls/token.idp";
+string configEndpoint = $"{authority}/.well-known/openid-configuration";
 string clientId = oidcConfig["ClientId"] ?? "";
 string callbackPath = oidcConfig["CallbackPath"] ?? "/signin-oidc";
 string certPath = oidcConfig.GetSection("Certificate")["Path"] ?? "";
