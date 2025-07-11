@@ -45,6 +45,8 @@ builder.Services.AddAuthentication(options =>
     options.GetClaimsFromUserInfoEndpoint = true;
     options.TokenValidationParameters.NameClaimType = "name";
     options.TokenValidationParameters.RoleClaimType = "role";
+    options.Scope.Clear();
+    options.Scope.Add("openid");
     // Custom events to use mTLS for token endpoint
     options.Events = new OpenIdConnectEvents
     {

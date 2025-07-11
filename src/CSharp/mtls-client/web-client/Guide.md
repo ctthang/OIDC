@@ -87,21 +87,52 @@ Follow the steps:
 openssl pkcs12 -in client.pfx -clcerts -nokeys -out client-cert.pem
 ```
 
-2. Generate the kid value from the public key
+2. Open the below content using Windows PowerShell ISE (Run as Administrator)
 
-```bash
-openssl x509 -in client-cert.pem -outform DER | openssl dgst -sha1 -binary | base64 | tr '+/' '-_' | tr -d '='
+```powershell
+# Path to your PEM file
+$pemPath = "C:\temp\client-cert.pem"
+
+# Read the file and isolate the base64 certificate lines
+$pemContent = Get-Content $pemPath -Raw
+$base64Cert = ($pemContent -split "`r?`n" | Where-Object {
+    $_ -match '^[A-Za-z0-9+/=]+$'
+}) -join ""
+
+# Convert to byte array (DER format)
+$certBytes = [Convert]::FromBase64String($base64Cert)
+
+# Compute SHA-1 hash
+$sha1 = [System.Security.Cryptography.SHA1]::Create()
+$hashBytes = $sha1.ComputeHash($certBytes)
+
+# Encode as base64url (no padding, -/_ instead of +/)
+$base64Url = [Convert]::ToBase64String($hashBytes).Replace('+','-').Replace('/','_').Replace('=','')
+
+# Output the key ID
+Write-Output "kid: $base64Url"
+
 ```
 
-3. Convert PEM to JWK:
+3. Update path to your PEM file on `$pemPath`
+4. Execute the script.
+5. Convert PEM to JWK:
 
-- Go to [jwkset.com/generate](https://jwkset.com/generate), paste your PEM certificate.
-- Input the kid value collected from previous step.
-- Select **RS256** under the **Key algorithm** dropdown list.
-- Select **Signature** under the **Key use** dropdown list
-- Press **Generate** button.
+- Go to [jwkset.com/generate](https://jwkset.com/generate):
+	- Paste your PEM content to **PEM encoded key or certificate** text input.
+	
+```
+-----BEGIN CERTIFICATE-----
+base64-cert
+-----END CERTIFICATE-----
+```
+
+	- Input the kid value collected from previous step.
+	- Select **RS256** under the **Key algorithm** dropdown list.
+	- Select **Signature** under the **Key use** dropdown list
+	- Press **Generate** button.
  
-Here is JSON Web Key example:
+Here is an example of a generated JSON Web Key:
 
 ```JSON
 {
@@ -119,6 +150,18 @@ Here is JSON Web Key example:
 }
 ```
 
+### Resolve error 500.19 when calling Identify mTLS endpoint
+
+You can encounter error: `Internal Server Error` from IIS when invoking the mTLS endpoint. It is due to the error code: `500.19.33` which relates to the Config error code.
+
+Here's a checklist to help you troubleshoot:
+
+1. Ensure to import the public key of self-signed CAs is to **LocalMachine\Trusted Root Certification Authorities**.
+2. Unlock the configuration on IIS: 
+- Access IIS, open Configuration editor on the Runtime of the tenant website. 
+- Access section: `system.webServer/security/access`
+- Choose "Unlock Section" 
+
 ### Configure the web-client
 
 1. Prepare your OAuth/OIDC connection in Identify Tenant
@@ -128,8 +171,8 @@ Here is JSON Web Key example:
    	 - **Client ID**: Your application client ID
 	 - **Client Secret**: Your application client secret
      - **Client jwks**: input its JWK format as generate above
-     - **Allowed Callback URIs**: `http://localhost:5254/signin-oidc`
-     - **Post Logout Redirect URI**: `http://localhost:5254/signout-callback-oidc`
+     - **Allowed Callback URIs**: `https://localhost:5254/signin-oidc`
+     - **Post Logout Redirect URI**: `https://localhost:5254/signout-callback-oidc`
      - **Security token audiences**: `https://localhost:7102/` 
 
 
@@ -162,7 +205,7 @@ Api configuration:
 Just keep it as it is, this is the default API endpoint when running locally.
 
 4. Run the web-client:dotnet run --project ./web-client/web-client.csproj
-   As result, the web-client will start on `http://localhost:5254`. (see the configuration in `launchSettings.json`)
+   As result, the web-client will start on `https://localhost:5254`. (see the configuration in `launchSettings.json`)
 
 ### 2. Configure the web-api
 1. Update `appsettings.json` in the web-api project with your JWT authority, audience, and the path to the public certificate for signature and the `cnf` claim validation.
