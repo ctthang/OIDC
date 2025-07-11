@@ -31,15 +31,17 @@ Configuration steps to Ctr-F5 run the solution locally:
 
 #### Additional setup on web server 
  
-Add the 2 following registry keys to your Identify server in case they haven't been added before: 
+To ensure proper mutual TLS authentication, add or update the following registry keys on your Identify server if they haven't been configured yet:
 
-1. Open the registry on Identify server. 
-2. Go to: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL
-   - Add the key: "SendTrustedIssuerList" (DWORD) with the value: 0. In case this key exists, set it 0  
-   - Add the key: "ClientAuthTrustMode" (DWORD) with the value: 2. In case this key exists, set it 2   
+1. Open the registry editor on Identify server. 
+2. Navigate to: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL
+   - Add the key: "SendTrustedIssuerList" (DWORD) with the value: 0. In case this key exists, set it 0. This setting disables the sending of a trusted issuer list to clients, reducing handshake size and avoiding potential compatibility issues.
+   - Add the key: "ClientAuthTrustMode" (DWORD) with the value: 2. In case this key exists, set it 2. This instructs the server to trust client certificates based only on explicitly trusted intermediate CAs, offering tighter control and enhanced security.
 
-3. Exit the registry and reset the Identify server   
-4. Reboot the Identify server 
+For more details on default values and behaviors of ClientAuthTrustMode, refer to the official documentation: https://learn.microsoft.com/en-us/windows-server/security/tls/what-s-new-in-tls-ssl-schannel-ssp-overview
+    
+3. Exit the registry editor. 
+4. Reboot the Identify server to apply the changes.   
 
 #### Disable client certificate revocation at IIS 
 
@@ -87,7 +89,7 @@ Follow the steps:
 openssl pkcs12 -in client.pfx -clcerts -nokeys -out client-cert.pem
 ```
 
-2. Open the below content using Windows PowerShell ISE (Run as Administrator)
+2. Open the below content using Windows PowerShell ISE
 
 ```powershell
 # Path to your PEM file
@@ -152,15 +154,15 @@ Here is an example of a generated JSON Web Key:
 
 ### Resolve error 500.19 when calling Identify mTLS endpoint
 
-You can encounter error: `Internal Server Error` from IIS when invoking the mTLS endpoint. It is due to the error code: `500.19.33` which relates to the Config error code.
+You may encounter an `Internal Server Error` from IIS when invoking the mTLS endpoint. This typically corresponds to error code `500.19`, which indicates a configuration issue in the site's web.config.
 
 Here's a checklist to help you troubleshoot:
 
-1. Ensure to import the public key of self-signed CAs is to **LocalMachine\Trusted Root Certification Authorities**.
-2. Unlock the configuration on IIS: 
-- Access IIS, open Configuration editor on the Runtime of the tenant website. 
-- Access section: `system.webServer/security/access`
-- Choose "Unlock Section" 
+1. - Ensure that the public key of your self-signed CA is imported to: **LocalMachine\Trusted Root Certification Authorities**
+2. Unlock configuration in IIS: 
+- Access IIS, open **Configuration editor** on the Runtime of the tenant website. 
+- Expand the section: `system.webServer/security/access`
+- Click "Unlock Section" to allow modifications to access-related configuration
 
 ### Configure the web-client
 
@@ -171,6 +173,19 @@ Here's a checklist to help you troubleshoot:
    	 - **Client ID**: Your application client ID
 	 - **Client Secret**: Your application client secret
      - **Client jwks**: input its JWK format as generate above
+
+     
+        ```JSON	 
+	         {
+            "keys": [
+                jwk01, jwk02
+            ]
+        }
+        ```
+
+        Where, `jwk01` and `jwk02` are JSON Web Key objects.
+
+
      - **Allowed Callback URIs**: `https://localhost:5254/signin-oidc`
      - **Post Logout Redirect URI**: `https://localhost:5254/signout-callback-oidc`
      - **Security token audiences**: `https://localhost:7102/` 
@@ -178,7 +193,6 @@ Here's a checklist to help you troubleshoot:
 
    - Security tab:
      - **JWS algorithm**: `RSASigning`
-     - **Allow Http Redirects**: Enabled
      - **Allow Code Flow**: Enabled
 
 2. Place your client certificate (PFX) in a secure location and update the path and password in configuration.
@@ -227,10 +241,9 @@ As a result , the web-api will start on `https://localhost:7102`. (see the confi
 
 ## How to Use the Solution
 
-### 1. Obtain an Access Token using the web-client
+### 1. web-client login with Identify Tenant
 - Start the web-client and log in with your Identify tenant via the browser.
 - After successful authentication, the home page will display your Access Token and Identity Token.
-- Copy the Access Token for use in API requests.
 
 ### 2. Call the HelloWorld API
 - Use the web-client UI or a tool like `curl` to call the HelloWorld endpoint.
