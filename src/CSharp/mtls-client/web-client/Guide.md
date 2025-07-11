@@ -304,10 +304,8 @@ Write-Output "kid: $base64Url"
 	- `$filename`: Specify client certificate name.
 	
 6. Execute the script.
-7. Convert PEM to JWK:
-
-- Go to [jwkset.com/generate](https://jwkset.com/generate):
-	- Paste your PEM content to **PEM encoded key or certificate** text input.
+7. Convert PEM to JWK: Navigate to [jwkset.com/generate](https://jwkset.com/generate):
+- Paste your PEM content to **PEM encoded key or certificate** text input.
 	
 ```
 -----BEGIN CERTIFICATE-----
@@ -315,10 +313,10 @@ base64-cert
 -----END CERTIFICATE-----
 ```
 
-	- Input the kid value collected from previous step.
-	- Select **RS256** under the **Key algorithm** dropdown list.
-	- Select **Signature** under the **Key use** dropdown list
-	- Press **Generate** button.
+-Input the kid value collected from previous step.
+- Select **RS256** under the **Key algorithm** dropdown list.
+- Select **Signature** under the **Key use** dropdown list
+- Press **Generate** button.
  
 Here is an example of a generated JSON Web Key:
 
