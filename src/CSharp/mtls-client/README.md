@@ -192,13 +192,14 @@ To ensure proper mutual TLS authentication, add or update the following registry
 
 1. Open the registry editor on Identify server. 
 2. Navigate to: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL
-   - Add the key: "SendTrustedIssuerList" (DWORD) with the value: 0. In case this key exists, set it 0. This setting disables the sending of a trusted issuer list to clients, reducing handshake size and avoiding potential compatibility issues.
-   - Add the key: "ClientAuthTrustMode" (DWORD) with the value: 2. In case this key exists, set it 2. This instructs the server to trust client certificates based only on explicitly trusted intermediate CAs, offering tighter control and enhanced security.
+
+- Add the key: `SendTrustedIssuerList` (DWORD) with the value `0`. If this key already exists, set its value to `0`. This setting prevents the server from sending the list of trusted certificate authorities to clients during the TLS handshake, which can reduce handshake size and may help avoid issues with clients that cannot handle large or complex issuer lists.
+- Add the key: `ClientAuthTrustMode` (DWORD) with the value `2`. If this key already exists, set its value to `2`. This instructs the server to trust client certificates based only on explicitly trusted intermediate CAs, so you do not need to add each client certificate individually to the server's trusted store.
 
 For more details on default values and behaviors of ClientAuthTrustMode, refer to the official documentation: https://learn.microsoft.com/en-us/windows-server/security/tls/what-s-new-in-tls-ssl-schannel-ssp-overview
     
-3. Exit the registry editor. 
-4. Reboot the Identify server to apply the changes.   
+1. Exit the registry editor. 
+2. Reboot the Identify server to apply the changes.   
 
 #### Disable client certificate revocation at IIS 
 
