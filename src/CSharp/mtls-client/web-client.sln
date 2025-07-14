@@ -14,9 +14,11 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "certs", "certs", "{9D9C4DBF-24F4-490A-B91B-80B9711984EB}"
 	ProjectSection(SolutionItems) = preProject
 		certificates\Globeteam CA.cer = certificates\Globeteam CA.cer
+		certificates\Globeteam CA.pfx = certificates\Globeteam CA.pfx
+		certificates\mTLS Testcertificate.cer = certificates\mTLS Testcertificate.cer
+		certificates\mTLS Testcertificate.pem = certificates\mTLS Testcertificate.pem
+		certificates\mTLS Testcertificate.pfx = certificates\mTLS Testcertificate.pfx
 		certificates\pass.txt = certificates\pass.txt
-		certificates\Testclientcertificate.cer = certificates\Testclientcertificate.cer
-		certificates\Testclientcertificate.pfx = certificates\Testclientcertificate.pfx
 	EndProjectSection
 EndProject
 Global
