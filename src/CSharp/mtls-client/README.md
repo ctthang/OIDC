@@ -394,7 +394,6 @@ Here's a checklist to help you troubleshoot on Identify web server:
 
 
      - **Allowed Callback URIs**: `https://localhost:5254/signin-oidc`
-     - **Post Logout Redirect URI**: `https://localhost:5254/signout-callback-oidc`
      - **Security token audiences**: `https://localhost:7102/` 
 
 
