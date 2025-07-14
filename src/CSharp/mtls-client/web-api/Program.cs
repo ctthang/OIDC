@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
-using System.Security.Cryptography.X509Certificates;
-using Microsoft.IdentityModel.JsonWebTokens;
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,24 +25,28 @@ builder.Services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServe
 // JWT authentication with certificate validation and cnf claim check
 var authority = builder.Configuration["Jwt:Authority"] ?? "";
 var audience = builder.Configuration["Jwt:Audience"] ?? "";
-
-// Load the public key/certificate for signature validation
-var certPath = builder.Configuration["Jwt:Certificate:Path"];
-var cert = !string.IsNullOrEmpty(certPath) ? new X509Certificate2(certPath) : null;
+var httpClient = new HttpClient(new HttpClientHandler()
+{
+    ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
+});
+var configurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
+    metadataAddress: $"{authority}/.well-known/openid-configuration",
+    configRetriever: new OpenIdConnectConfigurationRetriever(),
+    docRetriever: new HttpDocumentRetriever(httpClient)
+);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = authority;
-        options.Audience = audience;
-        options.RequireHttpsMetadata = false; // For development only
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = cert != null ? new X509SecurityKey(cert) : null,
+            ValidIssuer = authority,
+            ValidAudience = audience,
+            ConfigurationManager = configurationManager,
             NameClaimType = "name",
             ClockSkew = TimeSpan.FromMinutes(5) // Allow for some clock skew
         };
@@ -87,7 +90,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                         using var sha256 = SHA256.Create();
                         var certBytes = clientCert.GetRawCertData();
                         var sha256Hash = sha256.ComputeHash(certBytes);
-                        var base64UrlThumbprint = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(sha256Hash);
+                        var base64UrlThumbprint = Base64UrlEncoder.Encode(sha256Hash);
                         
                         var expectedThumbprint = thumbprintElement.GetString();
                         Console.WriteLine($"Client cert thumbprint: {base64UrlThumbprint}");

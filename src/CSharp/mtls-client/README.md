@@ -233,7 +233,7 @@ netsh http show sslcert
 
 to verify the value at "Verify Client Certificate Revocation". They must be disabled. 
 
-8. Import the public key of self-signed CAs to **LocalMachine\Trusted Root Certificate Authority**.
+8. Import the public key of self-signed CAs to **LocalMachine\Trusted Root Certification Authorities**.
 
 ### Generate the client jwks for the client Certificate
 
@@ -428,15 +428,12 @@ Just keep it as it is, this is the default API endpoint when running locally.
    As result, the web-client will start on `https://localhost:5254`. (see the configuration in `launchSettings.json`)
 
 ### 2. Configure the web-api
-1. Update `appsettings.json` in the web-api project with your JWT authority, audience, and the path to the public certificate for signature and the `cnf` claim validation.
+1. Update `appsettings.json` in the web-api project with your JWT authority and audience.
 
 ```JSON
 "Jwt": {
     "Authority": "https://identify.example.com/runtime/oauth2",
-    "Audience": "https://localhost:7102/",
-    "Certificate": {
-      "Path": "[Full path to the public certificate to validate the signature and the `cnf` claim]"
-    }
+    "Audience": "https://localhost:7102/"
   }
 ```
 
