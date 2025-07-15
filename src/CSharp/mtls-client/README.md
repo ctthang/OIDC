@@ -1,6 +1,7 @@
 # Solution Guide: ASP.NET Core OIDC mTLS Web Client & API
 
-This solution demonstrates a secure integration between a Razor Pages web client and a Web API using OpenID Connect (OIDC) with mTLS (mutual TLS) for the token endpoint and certificate-bound access tokens.
+This solution demonstrates a secure integration between a Razor Pages web client using OpenID Connect (OIDC) and a console app using the Client Credentials with mTLS (mutual TLS) for the token endpoint and certificate-bound access tokens.
+Both applications then will use the Access token to call an example REST API. 
 
 ---
 
@@ -12,7 +13,14 @@ This solution demonstrates a secure integration between a Razor Pages web client
 - Displays Access Token and Identity Token after login.
 - Allows users to call the HelloWorld API through a server-side proxy that includes the client certificate in the HTTPS connection.
 
-### 2. web-api (ASP.NET Core Web API)
+### 2. Console app (Client Credentials Flow with mTLS)
+
+- Demonstrates how a non-interactive client (console application) can obtain an access token using the OAuth2 Client Credentials flow with mutual TLS (mTLS) at the token endpoint.
+- Uses a client certificate to authenticate to the token endpoint and receive a certificate-bound access token.
+- Calls the HelloWorld API endpoint using the access token and the same client certificate for mTLS.
+- Validates the API response to ensure successful authentication and authorization.
+
+### 3. web-api (ASP.NET Core Web API)
 - Secured with JWT Bearer authentication.
 - Validates the JWT signature and the `cnf` claim against the client certificate provided via mTLS.
 - Exposes a HelloWorld endpoint that requires a valid, certificate-bound access token.
@@ -400,6 +408,7 @@ Here's a checklist to help you troubleshoot on Identify web server:
    - Security tab:
      - **JWS algorithm**: `RSASigning`
      - **Allow Code Flow**: Enabled
+     - **Allow Client Credentials Flow**: Enable
 
 2. Place your client certificate (PFX) in a secure location and update the path and password in configuration.
 3. Update `appsettings.json` in the web-client project with your Identify Tenant details:
@@ -460,6 +469,34 @@ As a result , the web-api will start on `https://localhost:7102`. (see the confi
 ### 3. Expected Response
 Hello, World!
 ---
+
+### 4. Console app
+
+#### How it works
+
+1. The console app loads the client certificate (PFX) from disk.
+2. It sends a token request to the Identify Tenant's token endpoint using mTLS (client certificate) using Client Credentials grant type.
+3. Receives an access token with a `cnf` claim binding it to the certificate.
+4. Uses the access token and client certificate to call the HelloWorld API endpoint.
+5. Displays the API response in the console.
+
+#### Configuration
+
+- Update the console app's configuration file with:
+  - The Identify OAuth authority.
+  - The client ID.
+  - The path and password for the client certificate (PFX).
+  - The HelloWorld API endpoint URL.
+
+```XML
+  <appSettings>
+    <add key="Authority" value="https://identify.example.com/runtime/oauth2" />
+    <add key="ClientId" value="[Your App Client Id]" />
+    <add key="CertificatePath" value="[Path to your certificate]" />
+    <add key="CertificatePassword" value="[Certificate password]" />
+    <add key="ApiEndpoint" value="https://localhost:7102/HelloWorld"/>
+  </appSettings>
+```
 
 ## Notes
 - The authorize endpoint does not require mTLS, but the token endpoint does.
