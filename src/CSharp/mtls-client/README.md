@@ -1,18 +1,26 @@
 # Solution Guide: ASP.NET Core OIDC mTLS Web Client & API
 
-This solution demonstrates a secure integration between a Razor Pages web client and a Web API using OpenID Connect (OIDC) with mTLS (mutual TLS) for the token endpoint and certificate-bound access tokens.
+This solution demonstrates a secure integration between a Razor Pages web client using OpenID Connect (OIDC) and a console app using the Client Credentials with mTLS (mutual TLS) for the token endpoint and certificate-bound access tokens.
+Both applications then will use the Access token to call an example REST API. 
 
 ---
 
 ## Projects Overview
 
-### 1. web-client (ASP.NET Core Razor Pages Application)
+### web-client (ASP.NET Core Razor Pages Application)
 - Provides OIDC login with an external provider (Identify Tenant).
 - Uses a client certificate for mTLS at the token endpoint.
 - Displays Access Token and Identity Token after login.
 - Allows users to call the HelloWorld API through a server-side proxy that includes the client certificate in the HTTPS connection.
 
-### 2. web-api (ASP.NET Core Web API)
+### Console app (Client Credentials Flow with mTLS)
+
+- Demonstrates how a non-interactive client (console application) can obtain an access token using the OAuth2 Client Credentials flow with mutual TLS (mTLS) at the token endpoint.
+- Uses a client certificate to authenticate to the token endpoint and receive a certificate-bound access token.
+- Calls the HelloWorld API endpoint using the access token and the same client certificate for mTLS.
+- Validates the API response to ensure successful authentication and authorization.
+
+### web-api (ASP.NET Core Web API)
 - Secured with JWT Bearer authentication.
 - Validates the JWT signature and the `cnf` claim against the client certificate provided via mTLS.
 - Exposes a HelloWorld endpoint that requires a valid, certificate-bound access token.
@@ -371,14 +379,80 @@ Here's a checklist to help you troubleshoot on Identify web server:
 - Expand the section: `system.webServer/security/access`
 - Click "Unlock Section" to allow modifications to access-related configuration
 
+### Configure the web-api
+
+1. Update `appsettings.json` in the web-api project with your JWT authority and audience.
+
+```JSON
+"Jwt": {
+    "Authority": "https://identify.example.com/runtime/oauth2",
+    "Audience": "https://localhost:7102/"
+  }
+```
+
+Make sure the self-signed CA that issued the client certificates is imported into the **LocalMachine\Trusted Root Certification Authorities** store on the server hosting the web API.
+
+2. Run the web-api:dotnet run --project ./web-api/web-api.csproj
+
+As a result , the web-api will start on `https://localhost:7102`. (see the configuration in `launchSettings.json`)
+
+### Configure the console-app
+
+1. Prepare your OAuth connection in Identify Tenant
+
+   Log in **Admin UI portal**. Create a new OAuth application in your Identify Tenant with the following settings:
+   - Connection tab:
+   	 - **Client ID**: Your application client ID
+	 - **Client Secret**: Fill a dummy value.
+     - **Client jwks**: input its JWK format as generate above
+
+     
+        ```JSON	 
+	         {
+            "keys": [
+                jwk01, jwk02
+            ]
+        }
+        ```
+
+        Where, `jwk01` and `jwk02` are JSON Web Key objects.
+
+
+     - **Allowed Callback URIs**: Fill a dummy value, e.g. `https://identify.test.example/runtime`
+     - **Security token audiences**: `https://localhost:7102/` 
+
+
+   - Security tab:
+     - **JWS algorithm**: `RSASigning`
+     - **Allow Client Credentials Flow**: Enabled
+
+2. Place your client certificate (PFX) in a secure location and update the path and password in configuration.
+3. Update `App.config` in the console-app project with your Identify Tenant details:
+
+```XML
+  <appSettings>
+    <add key="Authority" value="https://identify.example.com/runtime/oauth2" />
+    <add key="ClientId" value="[Your App Client Id]" />
+    <add key="CertificatePath" value="[Path to your certificate]" />
+    <add key="CertificatePassword" value="[Certificate password]" />
+    <add key="ApiEndpoint" value="https://localhost:7102/HelloWorld"/>
+  </appSettings>
+```
+
+Just keep `ApiEndpoint` as it is, this is the default API endpoint when running locally.
+
+4. Run the console-app:dotnet run --project ./console-app/console-app.csproj
+
+As result, the console-app will start.
+
 ### Configure the web-client
 
 1. Prepare your OAuth/OIDC connection in Identify Tenant
 
-   Log in **Admin UI portal**. Create a new OIDC client in your Identify Tenant with the following settings:
+   Log in **Admin UI portal**. Create a new OIDC application in your Identify Tenant with the following settings:
    - Connection tab:
    	 - **Client ID**: Your application client ID
-	 - **Client Secret**: Your application client secret
+	 - **Client Secret**: Fill a dummy value
      - **Client jwks**: input its JWK format as generate above
 
      
@@ -426,42 +500,51 @@ Just keep it as it is, this is the default API endpoint when running locally.
 
 4. Run the web-client:dotnet run --project ./web-client/web-client.csproj
    As result, the web-client will start on `https://localhost:5254`. (see the configuration in `launchSettings.json`)
-
-### 2. Configure the web-api
-1. Update `appsettings.json` in the web-api project with your JWT authority and audience.
-
-```JSON
-"Jwt": {
-    "Authority": "https://identify.example.com/runtime/oauth2",
-    "Audience": "https://localhost:7102/"
-  }
-```
-
-Make sure the self-signed CA that issued the client certificates is imported into the **LocalMachine\Trusted Root Certification Authorities** store on the server hosting the web API.
-
-2. Run the web-api:dotnet run --project ./web-api/web-api.csproj
-As a result , the web-api will start on `https://localhost:7102`. (see the configuration in `launchSettings.json`)
-
+        
 ---
 
-## How to Use the Solution
+## How to Use the Solution using console-app
 
-### 1. web-client login with Identify Tenant
+### Run the web-api
+
+- Run the web-api:dotnet run --project ./web-api/web-api.csproj
+
+### Run the console-app
+
+#### Run the console-app
+
+- Run the console-app:dotnet run --project ./console-app/console-app.csproj
+
+#### How it works
+
+- The console app loads the client certificate (PFX) from disk.
+- It sends a token request to the Identify Tenant's token endpoint using mTLS (client certificate) using Client Credentials grant type.
+- Receives an access token with a `cnf` claim binding it to the certificate.
+- Uses the access token and client certificate to call the HelloWorld endpoint.
+- Displays the API response in the console.
+
+### Expected Response
+Hello, World!
+---
+
+## How to Use the Solution using web-client
+
+### web-client login with Identify Tenant
 - Start the web-client and log in with your Identify tenant via the browser.
 - After successful authentication, the home page will display your Access Token and Identity Token.
 
-### 2. Call the HelloWorld API
+### Call the HelloWorld API
 - Use the web-client UI or a tool like `curl` to call the HelloWorld endpoint.
 - You must provide:
   - The `Authorization: Bearer <access_token>` header (from the web-client)
   - A client certificate via mTLS connection for certificate-bound token validation
 - The web-client provides a button "Call HelloWorld API" to call the API with the necessary headers and automatically includes the client certificate via mTLS connection.
 
-### 3. Expected Response
+### Expected Response
 Hello, World!
 ---
 
 ## Notes
-- The authorize endpoint does not require mTLS, but the token endpoint does.
+- The authorize request from the `web-client` to Identify does not use mTLS, but the token endpoint does.
 - The API will reject requests if the access token is missing, invalid, or the client certificate does not match the `cnf` claim in the token.
-- Both projects target .NET 8.
+- All projects target .NET 8.

@@ -21,6 +21,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "certs", "certs", "{9D9C4DBF
 		certificates\pass.txt = certificates\pass.txt
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "console-app", "console-app\console-app.csproj", "{25F7A4D9-1C3D-4E31-9750-DB671F934BAB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -35,6 +37,10 @@ Global
 		{1D96E274-4CFB-4743-A23F-7D46279061B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1D96E274-4CFB-4743-A23F-7D46279061B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1D96E274-4CFB-4743-A23F-7D46279061B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{25F7A4D9-1C3D-4E31-9750-DB671F934BAB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{25F7A4D9-1C3D-4E31-9750-DB671F934BAB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{25F7A4D9-1C3D-4E31-9750-DB671F934BAB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{25F7A4D9-1C3D-4E31-9750-DB671F934BAB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
