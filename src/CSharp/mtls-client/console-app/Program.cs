@@ -57,7 +57,7 @@ namespace console_app
             Console.WriteLine("Sending HTTP request with Bearer token and client certificate");
             var response = httpClient.GetAsync(apiEndpoint).Result;
 
-            Console.WriteLine($"API response: {response.StatusCode} {response.ReasonPhrase}");
+            Console.WriteLine($"API response: {response.StatusCode}");
 
             if (response.IsSuccessStatusCode)
             {
