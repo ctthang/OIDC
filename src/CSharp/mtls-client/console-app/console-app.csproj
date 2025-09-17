@@ -9,7 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="IdentityModel" Version="6.0.0" />
+    <PackageReference Include="Duende.IdentityModel.OidcClient" Version="6.0.1" />
+    <PackageReference Include="Duende.IdentityModel.OidcClient.Extensions" Version="6.0.1" />
+    <PackageReference Include="IdentityModel" Version="7.0.0" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.7" />
   </ItemGroup>
 
