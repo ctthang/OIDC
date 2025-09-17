@@ -10,7 +10,7 @@ Both applications then will use the Access token to call an example REST API.
 ### web-client (ASP.NET Core Razor Pages Application)
 - Provides OIDC login with an external provider (Identify Tenant).
 - Uses a client certificate for mTLS at the token endpoint.
-- Displays Access Token and Identity Token after login.
+- Displays Access Token after login.
 - Allows users to call the HelloWorld API through a server-side proxy that includes the client certificate in the HTTPS connection.
 
 ### Console app (Client Credentials Flow with mTLS and DPoP Support)
