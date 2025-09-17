@@ -2,9 +2,7 @@
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.IdentityModel.JsonWebTokens;
 using System.Security.Cryptography;
-using Duende.IdentityModel;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text.Json;
 
@@ -234,71 +232,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                         }
                         
                         Console.WriteLine("   DPoP proof validation successful");
-                    }
-                    
-                    // Check cnf claim and client certificate (for both Bearer and DPoP)
-                    var cnf = context.Principal?.FindFirst("cnf")?.Value;
-                    if (string.IsNullOrEmpty(cnf))
-                    {
-                        Console.WriteLine("   Missing cnf claim in token");
-                        
-                        // Store error information in HttpContext for OnChallenge to access
-                        httpContext.Items["auth_error_code"] = "invalid_token";
-                        httpContext.Items["auth_error_description"] = "Access token missing required confirmation (cnf) claim for certificate binding.";
-                        
-                        context.Fail("Missing cnf claim.");
-                        return Task.CompletedTask;
-                    }
-
-                    // Get client certificate from connection
-                    var clientCert = httpContext.Connection.ClientCertificate;
-                    if(clientCert == null)
-                    {
-                        Console.WriteLine("   Client certificate is required but not provided");
-                        
-                        // Store error information in HttpContext for OnChallenge to access
-                        httpContext.Items["auth_error_code"] = "certificate_required";
-                        httpContext.Items["auth_error_description"] = "Client certificate is required for mTLS authentication but was not provided.";
-                        
-                        context.Fail("Client certificate is required.");
-                        return Task.CompletedTask;
-                    }
-
-                    // Parse cnf as JSON and compare thumbprints
-                    var cnfObj = System.Text.Json.JsonDocument.Parse(cnf);
-                    if (cnfObj.RootElement.TryGetProperty("x5t#S256", out var thumbprintElement))
-                    {
-                        // Calculate SHA256 thumbprint of the client certificate
-                        using var sha256 = SHA256.Create();
-                        var certBytes = clientCert.GetRawCertData();
-                        var sha256Hash = sha256.ComputeHash(certBytes);
-                        var base64UrlThumbprint = Base64UrlEncoder.Encode(sha256Hash);
-                        
-                        var expectedThumbprint = thumbprintElement.GetString();
-                        Console.WriteLine($"   Client cert thumbprint: {base64UrlThumbprint}");
-                        Console.WriteLine($"   Expected thumbprint: {expectedThumbprint}");
-                        
-                        if (!string.Equals(base64UrlThumbprint, expectedThumbprint, StringComparison.OrdinalIgnoreCase))
-                        {
-                            Console.WriteLine("   Client certificate thumbprint does not match cnf claim");
-                            context.Fail("Client certificate thumbprint does not match cnf claim.");
-                            context.Properties.Items["custom_error"] = "certificate_mismatch";
-                            context.Properties.Items["custom_error_description"] = "Client certificate thumbprint does not match the confirmation claim in the access token.";
-                            return Task.CompletedTask;
-                        }
-                        
-                        Console.WriteLine("   Certificate thumbprint validation successful");
-                    }
-                    else
-                    {
-                        Console.WriteLine("   Missing x5t#S256 property in cnf claim");
-                        
-                        // Store error information in HttpContext for OnChallenge to access
-                        httpContext.Items["auth_error_code"] = "invalid_token";
-                        httpContext.Items["auth_error_description"] = "Access token cnf claim missing required x5t#S256 certificate thumbprint property.";
-                        
-                        context.Fail("Missing x5t#S256 property in cnf claim.");
-                        return Task.CompletedTask;
                     }
                 }
                 catch (Exception ex)

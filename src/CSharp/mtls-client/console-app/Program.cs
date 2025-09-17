@@ -155,7 +155,9 @@ namespace console_app
                 
                 WriteInfo("Sending HTTP request with token and client certificate");
                 WriteData("API Endpoint", apiEndpoint);
-                
+
+                // Remove client certificate from the handler before making the API call
+                handler.ClientCertificates.Clear();
                 var response = httpClient.GetAsync(apiEndpoint).Result;
 
                 if (response.IsSuccessStatusCode)
