@@ -20,7 +20,6 @@ builder.Services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServe
 {
     options.ConfigureHttpsDefaults(httpsOptions =>
     {
-        httpsOptions.ClientCertificateMode = Microsoft.AspNetCore.Server.Kestrel.Https.ClientCertificateMode.AllowCertificate;
     });
 });
 
