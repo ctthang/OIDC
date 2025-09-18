@@ -1,7 +1,18 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Duende.IdentityModel.Jwk;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
+using NSign;
+using NSign.AspNetCore;
+using NSign.Providers;
+using NSign.Signatures;
+using System.IdentityModel.Tokens.Jwt;
+using System.Runtime.ConstrainedExecution;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using web_api;
 
@@ -13,6 +24,8 @@ builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+// Register IHttpContextAccessor
+builder.Services.AddHttpContextAccessor();
 
 // Configure client certificate authentication
 builder.Services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(options =>
@@ -24,9 +37,6 @@ builder.Services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServe
 
 // Configure HTTP Message Signatures
 var enableHttpSignatures = builder.Configuration.GetValue<bool>("HttpSignatures:Enabled", false);
-
-// Add HTTP Message Signature validator (demo version without external key resolver)
-builder.Services.AddSingleton<IHttpMessageSignatureValidator, CustomHttpMessageSignatureValidator>();
 
 // JWT authentication with certificate validation and cnf claim check
 var authority = builder.Configuration["Jwt:Authority"] ?? "";
@@ -71,7 +81,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 Console.WriteLine("[AUTH] OnMessageReceived - JWT Bearer authentication started");
                 var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
                 var dpopHeader = context.Request.Headers["DPoP"].FirstOrDefault();
-                var signatureHeader = context.Request.Headers["Signature"].FirstOrDefault();
                 
                 if (!string.IsNullOrEmpty(authHeader))
                 {
@@ -96,7 +105,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 }
                 
                 Console.WriteLine($"   DPoP Header Present: {!string.IsNullOrEmpty(dpopHeader)}");
-                Console.WriteLine($"   NSign HTTP Signature Present: {!string.IsNullOrEmpty(signatureHeader)}");
                 Console.WriteLine($"   Request Path: {context.Request.Path}");
                 Console.WriteLine($"   Request Method: {context.Request.Method}");
                 return Task.CompletedTask;
@@ -269,6 +277,106 @@ builder.Services.AddCors(options =>
     );
 });
 
+if (enableHttpSignatures)
+{
+    builder.Services
+        .Configure<RequestSignatureVerificationOptions>(options =>
+        {
+            options.TagsToVerify.Add("nsign-example-client");
+            options.CreatedRequired =
+                options.ExpiresRequired =
+                options.KeyIdRequired =
+                options.AlgorithmRequired =
+                options.TagRequired = true;
+            options.MissingSignatureResponseStatus = 404;
+            options.MaxSignatureAge = TimeSpan.FromMinutes(5);
+
+            // Note: The default behavior should continue to next middleware
+            // after successful verification. Do not set options.OnSignatureVerificationSucceeded!
+            // Setting it will prevent the middleware from continuing the pipeline.
+
+            options.VerifyNonce = (SignatureParamsComponent signatureParams) =>
+            {
+                Console.WriteLine($"Got signature with tag={signatureParams.Tag} and nonce={signatureParams.Nonce}.");
+                return true;
+            };
+
+            options.OnSignatureVerificationFailed = (context, reason) =>
+            {
+                Console.WriteLine($"Signature verification failed: {reason}");
+                return Task.CompletedTask;
+            };
+
+            options.OnSignatureInputError = (error, context) =>
+            {
+                Console.WriteLine("signature input error.");
+                return Task.CompletedTask;
+            };
+
+            options.OnMissingSignatures = (context) =>
+            {
+                Console.WriteLine("Missing signatures.");
+                return Task.CompletedTask;
+            };
+        })
+        .AddSignatureVerification((serviceProvider) =>
+        {
+            // Get current HttpContext
+            var httpContextAccessor = serviceProvider.GetRequiredService<IHttpContextAccessor>();
+            var httpContext = httpContextAccessor.HttpContext;
+            var rsaFromDPoP = ExtractPublicKeyFromDPoP(httpContext, out string keyId);
+            return new RsaPssSha512SignatureProvider(null, rsaFromDPoP, keyId);
+        });
+}
+
+static void ValidateSignatureAndDigest(IApplicationBuilder builder)
+{
+    builder.UseSignatureVerification();
+}
+
+static RSA? ExtractPublicKeyFromDPoP(HttpContext httpContext, out string keyId)
+{
+    keyId = string.Empty;
+    var dpopHeader = httpContext.Request.Headers["DPoP"].FirstOrDefault();
+    if (dpopHeader != null)
+    {
+        // 
+        var handler = new JwtSecurityTokenHandler();
+        var dpopToken = handler.ReadJwtToken(dpopHeader);
+        if (!dpopToken.Header.TryGetValue("jwk", out var jwkObj))
+        {
+            return null;
+        }
+        // Convert JWK object to JSON string for processing
+        var jwkJson = JsonSerializer.Serialize(jwkObj);
+
+        // Create JsonWebKey from the embedded JWK
+        var jsonWebKey = new Microsoft.IdentityModel.Tokens.JsonWebKey(jwkJson);
+
+        keyId = Base64UrlEncoder.Encode(SHA256.Create().ComputeHash(jsonWebKey.ComputeJwkThumbprint()));
+        return FromJwk(jsonWebKey);
+    }
+    return null;
+}
+
+// Only need public RSA key from JWK
+static RSA FromJwk(Microsoft.IdentityModel.Tokens.JsonWebKey jsonWebKey)
+{
+    var nBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.N);
+    var eBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.E);
+
+    var rsaParams = new RSAParameters
+    {
+        Modulus = nBytes,
+        Exponent = eBytes
+    };
+
+    var rsaKey = RSA.Create();
+    rsaKey.ImportParameters(rsaParams);
+
+    return rsaKey;
+}
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -282,16 +390,15 @@ app.UseHttpsRedirection();
 
 app.UseCors(); // Enable CORS before authentication/authorization
 
-// Add HTTP Message Signature middleware before authentication
-if (enableHttpSignatures)
-{
-    Console.WriteLine("[MIDDLEWARE] HTTP Message Signature verification enabled");
-    app.UseMiddleware<HttpMessageSignatureMiddleware>();
-}
-
 app.UseAuthentication();
 
 app.UseAuthorization();
+
+
+if (enableHttpSignatures)
+{
+    app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/HelloWorld"), ValidateSignatureAndDigest);
+}
 
 app.MapControllers();
 

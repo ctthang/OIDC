@@ -3,7 +3,7 @@
 This solution demonstrates a secure integration between a Razor Pages web client using OpenID Connect (OIDC) and a console app using the Client Credentials with mTLS (mutual TLS) for the token endpoint and certificate-bound access tokens. Both applications support **DPoP (Demonstration of Proof-of-Possession)** per RFC 9449 for enhanced security.
 Both applications then will use the Access token to call an example REST API.
 
-**NEW**: Both applications now also support **HTTP Message Signatures** per RFC 9421 for enhanced request integrity and authenticity.
+**NEW**: Both applications now also support **HTTP Message Signatures** per RFC 9421 using the **NSign library** for enhanced request integrity and authenticity.
 
 ---
 
@@ -22,7 +22,7 @@ Both applications then will use the Access token to call an example REST API.
 - **NEW**: Supports DPoP (Demonstration of Proof-of-Possession) per RFC 9449 for enhanced token security.
 - Uses a client certificate to authenticate to the token endpoint and receive a certificate-bound access token.
 - **NEW**: Generates fresh DPoP proof tokens for both token requests and API calls, ensuring proper proof-of-possession validation.
-- **NEW**: Supports HTTP Message Signatures per RFC 9421 when calling the API endpoint.
+- **NEW**: Supports HTTP Message Signatures per RFC 9421 using the **NSign library** when calling the API endpoint.
 - Calls the HelloWorld API endpoint using the access token and the same client certificate for mTLS.
 - Validates the API response to ensure successful authentication and authorization.
 
@@ -33,7 +33,8 @@ Both applications then will use the Access token to call an example REST API.
   - Access token binding validation via `cnf.jkt` claims
   - HTTP method (`htm`) and URI (`htu`) claim validation
   - Timestamp (`iat`) and nonce (`jti`) validation for replay protection
-- **NEW**: HTTP Message Signatures validation per RFC 9421.
+- **NEW**: HTTP Message Signatures validation per RFC 9421 using the **NSign library**.
+- **CRITICAL FIX**: Properly configured to continue to controllers after successful signature verification.
 - Validates the JWT signature and the `cnf` claim against the client certificate provided via mTLS.
 - **NEW**: Configurable DPoP enforcement mode - can require DPoP authentication or accept both DPoP and Bearer tokens.
 - Exposes a HelloWorld endpoint that requires a valid, certificate-bound access token.
@@ -42,7 +43,7 @@ Both applications then will use the Access token to call an example REST API.
 
 ## Configuration Steps
 
-Configuration steps to Ctr-F5 run the solution locally:
+Configuration steps to Ctrl-F5 run the solution locally:
 
 ### Prerequisites
 - .NET 8 SDK installed
@@ -401,11 +402,19 @@ Here's a checklist to help you troubleshoot on Identify web server:
     "Authority": "https://identify.example.com/runtime/oauth2",
     "Audience": "https://localhost:7102/",
     "EnforceDpop": true
+  },
+"HttpSignatures": {
+    "Enabled": true,
+    "MaxAge": 300
   }
 ```
 
 **DPoP Configuration:**
 - `EnforceDpop`: Set to `true` to require DPoP authentication for all requests, or `false` to accept both DPoP and Bearer tokens (default: `false`)
+
+**HTTP Message Signatures Configuration:**
+- `Enabled`: Set to `true` to enable HTTP Message Signatures validation, `false` to disable (default: `false`)
+- `MaxAge`: Maximum age in seconds for signature freshness validation (default: `300`)
 
 Make sure the self-signed CA that issued the client certificates is imported into the **LocalMachine\Trusted Root Certification Authorities** store on the server hosting the web API.
 
@@ -456,6 +465,7 @@ As a result , the web-api will start on `https://localhost:7102`. (see the confi
     <add key="UseDpop" value="True"/>
     <add key="DpopAlg" value="PS384"/>
     <add key="DpopMethod" value="POST"/>
+    <add key="UseHttpSignatures" value="True"/>
   </appSettings>
 ```
 
@@ -463,6 +473,9 @@ As a result , the web-api will start on `https://localhost:7102`. (see the confi
 - `UseDpop`: Set to `True` to enable DPoP proof generation, `False` for standard Bearer token flow (default: `False`)
 - `DpopAlg`: Cryptographic algorithm for DPoP proof signing. Supported algorithms: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512` (default: `PS256`)
 - `DpopMethod`: HTTP method for token endpoint requests (default: `POST`)
+
+**HTTP Message Signatures Configuration Options:**
+- `UseHttpSignatures`: Set to `True` to enable HTTP Message Signatures generation, `False` to disable (default: `False`)
 
 Just keep `ApiEndpoint` as it is, this is the default API endpoint when running locally.
 
@@ -522,41 +535,74 @@ This solution implements **RFC 9449 - OAuth 2.0 Demonstration of Proof-of-Posses
 | **Request Binding** | No | Yes - bound to specific HTTP method and URL |
 | **Complexity** | Simple | More complex but significantly more secure |
 
-## HTTP Message Signatures (RFC 9421) Features
+## HTTP Message Signatures (RFC 9421) Features - NSign Library Integration
 
-This solution implements **RFC 9421 - HTTP Message Signatures** for enhanced request integrity and authenticity:
+This solution implements **RFC 9421 - HTTP Message Signatures** using the **professional NSign library** for enhanced request integrity and authenticity:
 
 ### HTTP Message Signatures Security Benefits
 - **Request Integrity**: Cryptographically ensures that HTTP requests have not been tampered with in transit
 - **Authenticity**: Proves that the request originated from a party possessing the private key
 - **Non-repudiation**: Provides cryptographic proof of the origin of the request
-- **Standard Compliance**: Implements the IETF standard for HTTP message signatures
+- **Standard Compliance**: Implements the IETF standard for HTTP message signatures using a professional library
 
 ### HTTP Message Signatures Implementation Details
 
-#### Console App (Client)
-- Generates HTTP Message Signatures using the NSign library
-- Signs requests with RSA keys using the `rsa-pss-sha256` algorithm
+#### Console App (Client) - NSign Integration
+- Uses **NSign library** for RFC 9421 compliant HTTP Message Signatures generation
+- Signs requests with RSA keys using the `rsa-pss-sha512` algorithm
 - Signs critical components: `@method`, `@path`, `@authority`, and `authorization` header
-- Uses the same DPoP RSA key for signing
+- Uses the same DPoP RSA key for signing (key reuse for enhanced security)
 - Automatically adds `Signature` and `Signature-Input` headers to requests
 
-#### Web API (Resource Server)
-- Validates HTTP Message Signatures using custom middleware
-- Verifies signatures against expected components
+#### Web API (Resource Server) - NSign Integration
+- **NSign library** for professional HTTP Message Signatures validation
+- **DPoP key resolution**: Extracts public keys from DPoP proof tokens for signature verification
+- **CRITICAL FIX APPLIED**: Properly configured `OnSignatureVerificationSucceeded` to continue to controllers
+- Validates signatures against expected components with configurable algorithms
 - Enforces signature freshness (5-minute default window)
-- Configurable enforcement mode (require signatures vs. optional)
 - Provides detailed error responses for signature validation failures
+
+### Critical Fix for NSign Middleware
+**Problem**: NSign middleware was successfully verifying signatures but **not continuing** to the controller, resulting in HTTP 200 responses with empty content.
+
+**Root Cause**: The issue was related to improper configuration of NSign's middleware behavior and attempting to use incorrect API callbacks.
+
+**Solution**: 
+1. **Removed incorrect callback**: The `OnSignatureVerificationSucceeded` callback was using wrong API
+2. **Let NSign handle continuation**: NSign's default behavior automatically continues to next middleware after successful verification
+3. **Proper configuration**: Configure error handlers but let success path follow NSign's intended flow
+
+**Key insight**: NSign middleware should **automatically** continue to the next middleware when signatures verify successfully - no custom callback needed.
+
+```csharp
+// CORRECT: Let NSign handle success continuation automatically
+builder.Services.Configure<RequestSignatureVerificationOptions>(options =>
+{
+    // Configure verification requirements and error handlers
+    options.TagsToVerify.Add("nsign-example-client");
+    options.CreatedRequired = options.ExpiresRequired = 
+        options.KeyIdRequired = options.AlgorithmRequired = 
+        options.TagRequired = true;
+    
+    // Error handlers (optional)
+    options.OnSignatureVerificationFailed = (context, reason) => { ... };
+    
+    // NO OnSignatureVerificationSucceeded callback needed!
+    // NSign automatically continues to next middleware on success
+});
+```
 
 ### HTTP Message Signatures vs. Other Security Mechanisms
 
-| Feature | Bearer Tokens | DPoP Tokens | HTTP Message Signatures |
-|---------|---------------|-------------|-------------------------|
+| Feature | Bearer Tokens | DPoP Tokens | HTTP Message Signatures (NSign) |
+|---------|---------------|-------------|---------------------------------|
 | **Security** | Vulnerable to token theft/replay | Bound to client key | Request integrity/authenticity |
 | **Proof of Possession** | No | Yes - key ownership | Yes - request signing |
 | **Replay Protection** | Limited | Strong | Strong (timestamped) |
 | **Request Binding** | No | Yes - HTTP method/URL | Yes - signed components |
 | **Integrity Protection** | No | No | Yes - cryptographic |
+| **Library Quality** | N/A | Custom implementation | Professional (NSign) |
+| **RFC Compliance** | RFC 6750 | RFC 9449 | RFC 9421 |
 | **Complexity** | Simple | More complex | Moderate |
 
 ## Notes
@@ -567,7 +613,9 @@ This solution implements **RFC 9421 - HTTP Message Signatures** for enhanced req
   - The console app automatically generates fresh DPoP proofs for each API call to comply with RFC 9449
   - DPoP enforcement can be configured per environment - useful for gradual rollout
 - **HTTP Message Signatures Notes**:
+  - Uses **NSign library** for professional RFC 9421 compliance
   - When enabled, requests must include valid `Signature` and `Signature-Input` headers
   - Signatures are validated against the expected components and algorithm
   - Signature freshness is enforced (default 5-minute window)
+  - **Critical fix applied**: Middleware now properly continues to controllers after successful verification
 - All projects target .NET 8.

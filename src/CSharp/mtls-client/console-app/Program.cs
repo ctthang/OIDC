@@ -1,12 +1,16 @@
 ﻿using Duende.IdentityModel.OidcClient.DPoP;
 using IdentityModel.Client;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
+using NSign;
+using NSign.Client;
+using NSign.Providers;
+using NSign.Signatures;
 using System.Configuration;
-using System.Diagnostics;
+using System.Runtime.Intrinsics.Arm;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Security.Cryptography;
-using Microsoft.IdentityModel.Tokens;
-using System.Text.Json;
 
 namespace console_app
 {
@@ -44,6 +48,7 @@ namespace console_app
                 // Generate JWK once and reuse for both DPoP and HTTP Message Signatures
                 string jwk = string.Empty;
                 RSA? rsaKey = null;
+                JsonWebKey jsonWebKey = null;
                 if (useDpop || useHttpSignatures)
                 {
                     WriteHeader("Key Generation");
@@ -57,7 +62,7 @@ namespace console_app
                     // Extract RSA key from JWK for HTTP Message Signatures
                     if (useHttpSignatures)
                     {
-                        var jsonWebKey = new JsonWebKey(jwk);
+                        jsonWebKey = new JsonWebKey(jwk);
                         rsaKey = FromJwk(jsonWebKey);
                         WriteSuccess("RSA key extracted for HTTP Message Signatures");
                     }
@@ -148,9 +153,10 @@ namespace console_app
                 HttpClient apiHttpClient;
                 if (useHttpSignatures && rsaKey != null)
                 {
+                    var keyId = Base64UrlEncoder.Encode(SHA256.Create().ComputeHash(jsonWebKey.ComputeJwkThumbprint()));
                     // Create HTTP client with custom HTTP Message Signatures support
                     WriteInfo("Creating HTTP client with custom HTTP Message Signatures support");
-                    apiHttpClient = CreateHttpClientWithSignatures(apiHandler, rsaKey, clientId);
+                    apiHttpClient = CreateHttpClientWithSignatures(apiHandler, rsaKey, keyId);
                 }
                 else
                 {
@@ -200,7 +206,7 @@ namespace console_app
                     var content = await response.Content.ReadAsStringAsync();
                     WriteInfo("API Response:");
                     WriteJson(content);
-                    
+                
                     // Display HTTP Message Signature headers if present
                     if (useHttpSignatures)
                     {
@@ -240,27 +246,57 @@ namespace console_app
             Console.Read();
         }
 
+        public static void ConfigureServices(IServiceCollection services, RSA rsa, string keyId)
+        {
+            services.AddHttpClient("signedClient")
+                .AddContentDigestAndSigningHandlers()
+            .Services
+
+            // Configure message signing options
+            .Configure<AddContentDigestOptions>(options => options.WithHash(AddContentDigestOptions.Hash.Sha256))
+            .ConfigureMessageSigningOptions(options =>
+            {
+                options.SignatureName = "http-msg-sign";
+                options
+                    .WithMandatoryComponent(SignatureComponent.RequestTargetUri)
+                    .WithMandatoryComponent(SignatureComponent.Method)
+                    .WithMandatoryComponent(SignatureComponent.Scheme)
+                    .WithMandatoryComponent(SignatureComponent.Authority)
+                    .WithOptionalComponent(SignatureComponent.ContentLength)
+                    .SetParameters = (signingOptions) => signingOptions
+                        .WithCreated(DateTimeOffset.UtcNow.AddMinutes(-2))
+                        .WithExpires(TimeSpan.FromMinutes(10))
+                        .WithNonce(Guid.NewGuid().ToString("N"))
+                        .WithTag("nsign-example-client")
+                    ;
+            })
+            .Services
+            .AddSingleton<ISigner>(sp =>
+            {
+                return new RsaPssSha512SignatureProvider(rsa, rsa, keyId);
+            });
+        }
+
         // Create HTTP client with custom HTTP Message Signatures support (RFC 9421)
-        static HttpClient CreateHttpClientWithSignatures(HttpClientHandler handler, RSA rsaKey, string clientId)
+        static HttpClient CreateHttpClientWithSignatures(HttpClientHandler handler, RSA rsaKey, string keyId)
         {
             WriteInfo("Configuring HTTP Message Signatures per RFC 9421 (Custom Implementation)");
 
             try
             {
-                // Create a custom delegating handler for HTTP Message Signatures
-                var signingHandler = new HttpMessageSigningDelegatingHandler(rsaKey, clientId)
-                {
-                    InnerHandler = handler
-                };
+                var services = new ServiceCollection();
+                ConfigureServices(services, rsaKey, keyId);
+                var builtProvider = services.BuildServiceProvider();
+                var clientFactory = builtProvider.GetRequiredService<IHttpClientFactory>();
 
-                var httpClient = new HttpClient(signingHandler);
+                var client = clientFactory.CreateClient("signedClient");
 
                 WriteSuccess("HTTP Message Signatures configured successfully");
-                WriteData("Key ID", clientId);
+                WriteData("Key ID", keyId);
                 WriteData("Implementation", "Custom RFC 9421 Implementation");
                 WriteData("Algorithm", "rsa-pss-sha256");
 
-                return httpClient;
+                return client;
             }
             catch (Exception ex)
             {
@@ -269,106 +305,6 @@ namespace console_app
 
                 // Fallback to standard HTTP client if configuration fails
                 return new HttpClient(handler);
-            }
-        }
-
-        // Custom HTTP Message Signing Handler implementing RFC 9421
-        public class HttpMessageSigningDelegatingHandler : DelegatingHandler
-        {
-            private readonly RSA _rsaKey;
-            private readonly string _keyId;
-
-            public HttpMessageSigningDelegatingHandler(RSA rsaKey, string keyId)
-            {
-                _rsaKey = rsaKey ?? throw new ArgumentNullException(nameof(rsaKey));
-                _keyId = keyId ?? throw new ArgumentNullException(nameof(keyId));
-            }
-
-            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            {
-                // Sign the request before sending
-                await SignRequestAsync(request);
-                
-                // Send the signed request
-                return await base.SendAsync(request, cancellationToken);
-            }
-
-            private async Task SignRequestAsync(HttpRequestMessage request)
-            {
-                try
-                {
-                    // RFC 9421: Signature components to include
-                    var components = new List<string>
-                    {
-                        "@method",
-                        "@path", 
-                        "@authority",
-                        "authorization"
-                    };
-
-                    // Build signature input string according to RFC 9421
-                    var signatureInputLines = new List<string>();
-                    
-                    // @method component
-                    signatureInputLines.Add($"\"@method\": {request.Method.ToString().ToUpperInvariant()}");
-                    
-                    // @path component (path + query)
-                    var path = request.RequestUri?.PathAndQuery ?? "/";
-                    signatureInputLines.Add($"\"@path\": {path}");
-                    
-                    // @authority component
-                    var authority = request.RequestUri?.Authority ?? "";
-                    signatureInputLines.Add($"\"@authority\": {authority}");
-                    
-                    // authorization header component
-                    var authHeader = request.Headers.Authorization?.ToString() ?? "";
-                    if (!string.IsNullOrEmpty(authHeader))
-                    {
-                        signatureInputLines.Add($"\"authorization\": {authHeader}");
-                    }
-
-                    // Create signature input string (RFC 9421 format)
-                    var signatureInput = string.Join("\n", signatureInputLines);
-                    
-                    // Create signature metadata
-                    var created = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                    var nonce = Guid.NewGuid().ToString("N")[..16]; // 16 character nonce
-                    
-                    // Build signature parameters
-                    var signatureParams = new Dictionary<string, string>
-                    {
-                        ["keyid"] = $"\"{_keyId}\"",
-                        ["alg"] = "\"rsa-pss-sha256\"",
-                        ["created"] = created.ToString(),
-                        ["nonce"] = $"\"{nonce}\""
-                    };
-                    
-                    // Create signature-input header value
-                    var componentsList = string.Join(" ", components.Select(c => $"\"{c}\""));
-                    var paramsList = string.Join(", ", signatureParams.Select(kvp => $"{kvp.Key}={kvp.Value}"));
-                    var signatureInputHeader = $"sig1=({componentsList});{paramsList}";
-                    
-                    // Sign the signature input string using RSA-PSS with SHA-256
-                    var signatureInputBytes = Encoding.UTF8.GetBytes(signatureInput);
-                    var signatureBytes = _rsaKey.SignData(signatureInputBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
-                    var signatureBase64 = Convert.ToBase64String(signatureBytes);
-                    
-                    // Create signature header value (RFC 9421 format)
-                    var signatureHeader = $"sig1=:{signatureBase64}:";
-                    
-                    // Add signature headers to request
-                    request.Headers.Add("Signature-Input", signatureInputHeader);
-                    request.Headers.Add("Signature", signatureHeader);
-                    
-                    WriteInfo($"HTTP Message Signature applied:");
-                    WriteData("  Signature Input", signatureInputHeader);
-                    WriteData("  Signature", $"sig1=:{signatureBase64.Substring(0, Math.Min(50, signatureBase64.Length))}...");
-                    WriteData("  Components", string.Join(", ", components));
-                }
-                catch (Exception ex)
-                {
-                    WriteWarning($"Failed to sign HTTP message: {ex.Message}");
-                }
             }
         }
 

@@ -229,35 +229,8 @@ namespace web_api
             try
             {
                 var jwk = JsonWebKey.Create(jwkJson);
-                
-                // Create canonical JWK representation for thumbprint calculation
-                var canonicalJwk = new Dictionary<string, object>();
-                
-                // Include only the required parameters for thumbprint calculation per RFC 7638
-                if (!string.IsNullOrEmpty(jwk.Kty))
-                    canonicalJwk["kty"] = jwk.Kty;
-                    
-                if (jwk.Kty == "RSA")
-                {
-                    if (!string.IsNullOrEmpty(jwk.N))
-                        canonicalJwk["n"] = jwk.N;
-                    if (!string.IsNullOrEmpty(jwk.E))
-                        canonicalJwk["e"] = jwk.E;
-                }
-                else 
-                {
-                    Console.WriteLine($"   [ERROR] Only support the RSA Kty!");
-                    return string.Empty;
-                }
-                
-                // Sort keys alphabetically and create canonical JSON
-                var sortedKeys = canonicalJwk.Keys.OrderBy(k => k).ToArray();
-                var canonicalJson = "{" + string.Join(",", sortedKeys.Select(k => $"\"{k}\":\"{canonicalJwk[k]}\"")) + "}";
-                
-                // Calculate SHA-256 hash of canonical JSON
-                var jsonBytes = System.Text.Encoding.UTF8.GetBytes(canonicalJson);
                 using var sha256 = SHA256.Create();
-                var hash = sha256.ComputeHash(jsonBytes);
+                var hash = sha256.ComputeHash(jwk.ComputeJwkThumbprint());
                 
                 // Return base64url-encoded thumbprint
                 return Base64UrlEncoder.Encode(hash);
