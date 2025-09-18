@@ -1,14 +1,18 @@
 ﻿using Duende.IdentityModel.OidcClient.DPoP;
 using IdentityModel.Client;
 using System.Configuration;
+using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Security.Cryptography;
+using Microsoft.IdentityModel.Tokens;
+using System.Text.Json;
 
 namespace console_app
 {
     internal class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             // Set console encoding to UTF-8 to support Unicode characters and emojis
             Console.OutputEncoding = Encoding.UTF8;
@@ -26,26 +30,43 @@ namespace console_app
                 string tokenEndpoint = $"{authority}/mtls/token.idp";
                 var useDpopSetting = ConfigurationManager.AppSettings["UseDpop"] ?? "false";
                 bool useDpop = bool.TryParse(useDpopSetting, out var result) && result;
+                var useHttpSignaturesSetting = ConfigurationManager.AppSettings["UseHttpSignatures"] ?? "false";
+                bool useHttpSignatures = bool.TryParse(useHttpSignaturesSetting, out var httpSigResult) && httpSigResult;
                 var dpopToken = string.Empty;
 
                 WriteSuccess("Configuration loaded successfully");
                 WriteData("Authority", authority);
                 WriteData("Client ID", clientId);
                 WriteData("API Endpoint", apiEndpoint);
+                WriteData("Use DPoP", useDpop.ToString());
+                WriteData("Use HTTP Signatures", useHttpSignatures.ToString());
 
-                // Generate JWK once and reuse for both token request and API call DPoP proofs
+                // Generate JWK once and reuse for both DPoP and HTTP Message Signatures
                 string jwk = string.Empty;
-                if (useDpop)
+                RSA? rsaKey = null;
+                if (useDpop || useHttpSignatures)
                 {
-                    WriteHeader("DPoP Key Generation");
+                    WriteHeader("Key Generation");
                     var dpopAlg = ConfigurationManager.AppSettings["DpopAlg"] ?? "PS256";
-                    WriteInfo($"Generating DPoP key pair with algorithm: {dpopAlg}");
+                    WriteInfo($"Generating RSA key pair with algorithm: {dpopAlg}");
                     
                     // Creates a JWK using the configured Alg or default PS256 algorithm:
                     jwk = JsonWebKeys.CreateRsaJson(dpopAlg);
                     WriteData("JWK", jwk);
-                    WriteSuccess("DPoP key pair generated successfully");
                     
+                    // Extract RSA key from JWK for HTTP Message Signatures
+                    if (useHttpSignatures)
+                    {
+                        var jsonWebKey = new JsonWebKey(jwk);
+                        rsaKey = FromJwk(jsonWebKey);
+                        WriteSuccess("RSA key extracted for HTTP Message Signatures");
+                    }
+                    
+                    WriteSuccess("Key pair generated successfully");
+                }
+
+                if (useDpop)
+                {
                     WriteHeader("DPoP Token for Token Request");
                     var dpopMethod = ConfigurationManager.AppSettings["DpopMethod"] ?? "POST";
                     WriteInfo($"Generating DPoP token for token request (method: {dpopMethod})");
@@ -94,7 +115,7 @@ namespace console_app
                     WriteInfo("DPoP header added to token request");
                 }
 
-                var tokenResponse = httpClient.RequestClientCredentialsTokenAsync(request).Result;
+                var tokenResponse = await httpClient.RequestClientCredentialsTokenAsync(request);
 
                 if (tokenResponse.IsError)
                 {
@@ -122,7 +143,20 @@ namespace console_app
 
                 // Now make an API call using the access token
                 WriteHeader("API Call");
+                var apiHandler = new HttpClientHandler();
                 
+                HttpClient apiHttpClient;
+                if (useHttpSignatures && rsaKey != null)
+                {
+                    // Create HTTP client with custom HTTP Message Signatures support
+                    WriteInfo("Creating HTTP client with custom HTTP Message Signatures support");
+                    apiHttpClient = CreateHttpClientWithSignatures(apiHandler, rsaKey, clientId);
+                }
+                else
+                {
+                    apiHttpClient = new HttpClient(apiHandler);
+                }
+
                 string apiDpopToken = string.Empty;
                 if (useDpop)
                 {
@@ -143,34 +177,48 @@ namespace console_app
                     
                     WriteData("API DPoP Token", apiDpopToken);
                     WriteSuccess("Fresh DPoP token generated for API call");
-                    
+
                     // Add the fresh DPoP header for API request
-                    httpClient.DefaultRequestHeaders.Clear(); // Clear any existing headers
-                    httpClient.DefaultRequestHeaders.Add("DPoP", apiDpopToken);
+                    apiHttpClient.DefaultRequestHeaders.Clear(); // Clear any existing headers
+                    apiHttpClient.DefaultRequestHeaders.Add("DPoP", apiDpopToken);
                     WriteInfo("Fresh DPoP header added to API request");
                 }
                 
-                httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(tokenResponse.TokenType, tokenResponse.AccessToken);
+                apiHttpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(tokenResponse.TokenType, tokenResponse.AccessToken);
                 WriteData("Authorization Scheme", tokenResponse.TokenType);
                 
-                WriteInfo("Sending HTTP request with token and client certificate");
+                WriteInfo("Sending HTTP request with custom HTTP Message Signatures");
                 WriteData("API Endpoint", apiEndpoint);
 
                 // Remove client certificate from the handler before making the API call
-                handler.ClientCertificates.Clear();
-                var response = httpClient.GetAsync(apiEndpoint).Result;
+                apiHandler.ClientCertificates.Clear();
+                var response = await apiHttpClient.GetAsync(apiEndpoint);
 
                 if (response.IsSuccessStatusCode)
                 {
                     WriteSuccess($"API call successful! Status: {response.StatusCode}");
-                    var content = response.Content.ReadAsStringAsync().Result;
+                    var content = await response.Content.ReadAsStringAsync();
                     WriteInfo("API Response:");
                     WriteJson(content);
+                    
+                    // Display HTTP Message Signature headers if present
+                    if (useHttpSignatures)
+                    {
+                        WriteHeader("Custom HTTP Message Signature Headers");
+                        foreach (var header in response.Headers.Concat(response.Content.Headers))
+                        {
+                            if (header.Key.StartsWith("Signature", StringComparison.OrdinalIgnoreCase) ||
+                                header.Key.StartsWith("Signature-Input", StringComparison.OrdinalIgnoreCase))
+                            {
+                                WriteData(header.Key, string.Join(", ", header.Value));
+                            }
+                        }
+                    }
                 }
                 else
                 {
                     WriteError($"API call failed: {response.StatusCode} {response.ReasonPhrase}");
-                    var errorContent = response.Content.ReadAsStringAsync().Result;
+                    var errorContent = await response.Content.ReadAsStringAsync();
                     if (!string.IsNullOrEmpty(errorContent))
                     {
                         WriteError($"Error Content: {errorContent}");
@@ -190,6 +238,167 @@ namespace console_app
             }
 
             Console.Read();
+        }
+
+        // Create HTTP client with custom HTTP Message Signatures support (RFC 9421)
+        static HttpClient CreateHttpClientWithSignatures(HttpClientHandler handler, RSA rsaKey, string clientId)
+        {
+            WriteInfo("Configuring HTTP Message Signatures per RFC 9421 (Custom Implementation)");
+
+            try
+            {
+                // Create a custom delegating handler for HTTP Message Signatures
+                var signingHandler = new HttpMessageSigningDelegatingHandler(rsaKey, clientId)
+                {
+                    InnerHandler = handler
+                };
+
+                var httpClient = new HttpClient(signingHandler);
+
+                WriteSuccess("HTTP Message Signatures configured successfully");
+                WriteData("Key ID", clientId);
+                WriteData("Implementation", "Custom RFC 9421 Implementation");
+                WriteData("Algorithm", "rsa-pss-sha256");
+
+                return httpClient;
+            }
+            catch (Exception ex)
+            {
+                WriteWarning($"Failed to configure HTTP signatures: {ex.Message}");
+                WriteInfo("Falling back to standard HTTP client");
+
+                // Fallback to standard HTTP client if configuration fails
+                return new HttpClient(handler);
+            }
+        }
+
+        // Custom HTTP Message Signing Handler implementing RFC 9421
+        public class HttpMessageSigningDelegatingHandler : DelegatingHandler
+        {
+            private readonly RSA _rsaKey;
+            private readonly string _keyId;
+
+            public HttpMessageSigningDelegatingHandler(RSA rsaKey, string keyId)
+            {
+                _rsaKey = rsaKey ?? throw new ArgumentNullException(nameof(rsaKey));
+                _keyId = keyId ?? throw new ArgumentNullException(nameof(keyId));
+            }
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                // Sign the request before sending
+                await SignRequestAsync(request);
+                
+                // Send the signed request
+                return await base.SendAsync(request, cancellationToken);
+            }
+
+            private async Task SignRequestAsync(HttpRequestMessage request)
+            {
+                try
+                {
+                    // RFC 9421: Signature components to include
+                    var components = new List<string>
+                    {
+                        "@method",
+                        "@path", 
+                        "@authority",
+                        "authorization"
+                    };
+
+                    // Build signature input string according to RFC 9421
+                    var signatureInputLines = new List<string>();
+                    
+                    // @method component
+                    signatureInputLines.Add($"\"@method\": {request.Method.ToString().ToUpperInvariant()}");
+                    
+                    // @path component (path + query)
+                    var path = request.RequestUri?.PathAndQuery ?? "/";
+                    signatureInputLines.Add($"\"@path\": {path}");
+                    
+                    // @authority component
+                    var authority = request.RequestUri?.Authority ?? "";
+                    signatureInputLines.Add($"\"@authority\": {authority}");
+                    
+                    // authorization header component
+                    var authHeader = request.Headers.Authorization?.ToString() ?? "";
+                    if (!string.IsNullOrEmpty(authHeader))
+                    {
+                        signatureInputLines.Add($"\"authorization\": {authHeader}");
+                    }
+
+                    // Create signature input string (RFC 9421 format)
+                    var signatureInput = string.Join("\n", signatureInputLines);
+                    
+                    // Create signature metadata
+                    var created = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    var nonce = Guid.NewGuid().ToString("N")[..16]; // 16 character nonce
+                    
+                    // Build signature parameters
+                    var signatureParams = new Dictionary<string, string>
+                    {
+                        ["keyid"] = $"\"{_keyId}\"",
+                        ["alg"] = "\"rsa-pss-sha256\"",
+                        ["created"] = created.ToString(),
+                        ["nonce"] = $"\"{nonce}\""
+                    };
+                    
+                    // Create signature-input header value
+                    var componentsList = string.Join(" ", components.Select(c => $"\"{c}\""));
+                    var paramsList = string.Join(", ", signatureParams.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+                    var signatureInputHeader = $"sig1=({componentsList});{paramsList}";
+                    
+                    // Sign the signature input string using RSA-PSS with SHA-256
+                    var signatureInputBytes = Encoding.UTF8.GetBytes(signatureInput);
+                    var signatureBytes = _rsaKey.SignData(signatureInputBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
+                    var signatureBase64 = Convert.ToBase64String(signatureBytes);
+                    
+                    // Create signature header value (RFC 9421 format)
+                    var signatureHeader = $"sig1=:{signatureBase64}:";
+                    
+                    // Add signature headers to request
+                    request.Headers.Add("Signature-Input", signatureInputHeader);
+                    request.Headers.Add("Signature", signatureHeader);
+                    
+                    WriteInfo($"HTTP Message Signature applied:");
+                    WriteData("  Signature Input", signatureInputHeader);
+                    WriteData("  Signature", $"sig1=:{signatureBase64.Substring(0, Math.Min(50, signatureBase64.Length))}...");
+                    WriteData("  Components", string.Join(", ", components));
+                }
+                catch (Exception ex)
+                {
+                    WriteWarning($"Failed to sign HTTP message: {ex.Message}");
+                }
+            }
+        }
+
+        static RSA FromJwk(JsonWebKey jsonWebKey)
+        {
+            var nBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.N);
+            var eBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.E);
+            var dBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.D);
+            var pBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.P);
+            var qBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.Q);
+            var dpBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.DP);
+            var dqBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.DQ);
+            var qiBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.QI);
+
+            var rsaParams = new RSAParameters
+            {
+                Modulus = nBytes,
+                Exponent = eBytes,
+                D = dBytes,
+                P = pBytes,
+                Q = qBytes,
+                DP = dpBytes,
+                DQ = dqBytes,
+                InverseQ = qiBytes
+            };
+
+            var rsaKey = RSA.Create();
+            rsaKey.ImportParameters(rsaParams);
+
+            return rsaKey;
         }
 
         // Helper methods for colorful console output

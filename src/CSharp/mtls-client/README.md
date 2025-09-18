@@ -1,7 +1,9 @@
 # Solution Guide: ASP.NET Core OIDC mTLS Web Client & API with DPoP Support
 
 This solution demonstrates a secure integration between a Razor Pages web client using OpenID Connect (OIDC) and a console app using the Client Credentials with mTLS (mutual TLS) for the token endpoint and certificate-bound access tokens. Both applications support **DPoP (Demonstration of Proof-of-Possession)** per RFC 9449 for enhanced security.
-Both applications then will use the Access token to call an example REST API. 
+Both applications then will use the Access token to call an example REST API.
+
+**NEW**: Both applications now also support **HTTP Message Signatures** per RFC 9421 for enhanced request integrity and authenticity.
 
 ---
 
@@ -12,6 +14,7 @@ Both applications then will use the Access token to call an example REST API.
 - Uses a client certificate for mTLS at the token endpoint.
 - Displays Access Token after login.
 - Allows users to call the HelloWorld API through a server-side proxy that includes the client certificate in the HTTPS connection.
+- **NEW**: Supports HTTP Message Signatures per RFC 9421 when calling the API endpoint.
 
 ### Console app (Client Credentials Flow with mTLS and DPoP Support)
 
@@ -19,6 +22,7 @@ Both applications then will use the Access token to call an example REST API.
 - **NEW**: Supports DPoP (Demonstration of Proof-of-Possession) per RFC 9449 for enhanced token security.
 - Uses a client certificate to authenticate to the token endpoint and receive a certificate-bound access token.
 - **NEW**: Generates fresh DPoP proof tokens for both token requests and API calls, ensuring proper proof-of-possession validation.
+- **NEW**: Supports HTTP Message Signatures per RFC 9421 when calling the API endpoint.
 - Calls the HelloWorld API endpoint using the access token and the same client certificate for mTLS.
 - Validates the API response to ensure successful authentication and authorization.
 
@@ -29,6 +33,7 @@ Both applications then will use the Access token to call an example REST API.
   - Access token binding validation via `cnf.jkt` claims
   - HTTP method (`htm`) and URI (`htu`) claim validation
   - Timestamp (`iat`) and nonce (`jti`) validation for replay protection
+- **NEW**: HTTP Message Signatures validation per RFC 9421.
 - Validates the JWT signature and the `cnf` claim against the client certificate provided via mTLS.
 - **NEW**: Configurable DPoP enforcement mode - can require DPoP authentication or accept both DPoP and Bearer tokens.
 - Exposes a HelloWorld endpoint that requires a valid, certificate-bound access token.
@@ -517,12 +522,52 @@ This solution implements **RFC 9449 - OAuth 2.0 Demonstration of Proof-of-Posses
 | **Request Binding** | No | Yes - bound to specific HTTP method and URL |
 | **Complexity** | Simple | More complex but significantly more secure |
 
+## HTTP Message Signatures (RFC 9421) Features
+
+This solution implements **RFC 9421 - HTTP Message Signatures** for enhanced request integrity and authenticity:
+
+### HTTP Message Signatures Security Benefits
+- **Request Integrity**: Cryptographically ensures that HTTP requests have not been tampered with in transit
+- **Authenticity**: Proves that the request originated from a party possessing the private key
+- **Non-repudiation**: Provides cryptographic proof of the origin of the request
+- **Standard Compliance**: Implements the IETF standard for HTTP message signatures
+
+### HTTP Message Signatures Implementation Details
+
+#### Console App (Client)
+- Generates HTTP Message Signatures using the NSign library
+- Signs requests with RSA keys using the `rsa-pss-sha256` algorithm
+- Signs critical components: `@method`, `@path`, `@authority`, and `authorization` header
+- Uses the same DPoP RSA key for signing
+- Automatically adds `Signature` and `Signature-Input` headers to requests
+
+#### Web API (Resource Server)
+- Validates HTTP Message Signatures using custom middleware
+- Verifies signatures against expected components
+- Enforces signature freshness (5-minute default window)
+- Configurable enforcement mode (require signatures vs. optional)
+- Provides detailed error responses for signature validation failures
+
+### HTTP Message Signatures vs. Other Security Mechanisms
+
+| Feature | Bearer Tokens | DPoP Tokens | HTTP Message Signatures |
+|---------|---------------|-------------|-------------------------|
+| **Security** | Vulnerable to token theft/replay | Bound to client key | Request integrity/authenticity |
+| **Proof of Possession** | No | Yes - key ownership | Yes - request signing |
+| **Replay Protection** | Limited | Strong | Strong (timestamped) |
+| **Request Binding** | No | Yes - HTTP method/URL | Yes - signed components |
+| **Integrity Protection** | No | No | Yes - cryptographic |
+| **Complexity** | Simple | More complex | Moderate |
+
 ## Notes
-- The authorize request from the `web-client` to Identify does not use mTLS, but the token endpoint does.
-- The API will reject requests if the access token is missing, invalid, or the client certificate does not match the `cnf` claim in the token.
+- The API will reject requests if the access token is missing, invalid.
 - **DPoP Notes**:
-  - When DPoP is enabled, the API validates both certificate binding (`cnf.x5t#S256`) and key binding (`cnf.jkt`)
+  - When DPoP is enabled, the API validates key binding (`cnf.jkt`)
   - DPoP proofs must be fresh (generated within 5 minutes) and unique (different `jti` values)
   - The console app automatically generates fresh DPoP proofs for each API call to comply with RFC 9449
   - DPoP enforcement can be configured per environment - useful for gradual rollout
+- **HTTP Message Signatures Notes**:
+  - When enabled, requests must include valid `Signature` and `Signature-Input` headers
+  - Signatures are validated against the expected components and algorithm
+  - Signature freshness is enforced (default 5-minute window)
 - All projects target .NET 8.
