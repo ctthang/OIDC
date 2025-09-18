@@ -7,7 +7,6 @@ This implementation provides HTTP Message Signature validation using the **NSign
 ### 🎯 **NSign Library Integration**
 - **Professional Library**: Uses the robust NSign library for RFC 9421 compliance
 - **DPoP Key Resolution**: Extracts public keys from DPoP proof tokens for signature verification
-- **Production Ready**: Full middleware pipeline with proper error handling
 
 ### 1. NSign Library with DPoP Integration
 The implementation **integrates NSign library with DPoP key resolution**:
@@ -26,12 +25,11 @@ NSign properly reconstructs the signature input string according to RFC 9421:
 ### 3. Signature Verification (via NSign)
 - Supports RSA-PSS-SHA512 (used in this implementation)
 - Full cryptographic verification using NSign's robust implementation
-- **CRITICAL**: Properly configured to continue to next middleware after successful verification
 
 ### 4. Security Features
 - **Replay Protection**: Timestamp validation with configurable max age
 - **Strong Binding**: Same key used for both DPoP and HTTP signatures
-- **Nonce Verification**: Configurable nonce validation for replay protection
+- **Nonce Verification**: N/A
 
 ## NSign Configuration
 
@@ -60,9 +58,6 @@ if (enableHttpSignatures)
                 options.TagRequired = true;
             options.MissingSignatureResponseStatus = 404;
             options.MaxSignatureAge = TimeSpan.FromMinutes(5);
-
-            // CRITICAL FIX: Let NSign handle middleware continuation properly
-            // The default behavior should continue to next middleware after successful verification
 
             options.VerifyNonce = (SignatureParamsComponent signatureParams) =>
             {
@@ -114,8 +109,8 @@ if (enableHttpSignatures)
 GET /HelloWorld HTTP/1.1
 Authorization: DPoP <access_token>
 DPoP: <dpop_proof_with_jwk>
-Signature: sig1=:<signature>:
-Signature-Input: sig1=("@method" "@path" "@authority" "authorization");keyid="client1",alg="rsa-pss-sha512",created=1234567890
+Signature: http-msg-sign=:<signature>:
+Signature-Input: http-msg-sign=("@method" "@path" "@authority" "authorization");keyid="client1",alg="rsa-pss-sha512",created=1234567890
 ```
 
 ### 2. Server Processing
@@ -138,18 +133,6 @@ Signature-Input: sig1=("@method" "@path" "@authority" "authorization");keyid="cl
 ✅ Controller returns "Hello, World!"
 ```
 
-### 4. Critical Fix Applied
-**Problem**: NSign middleware was verifying signatures successfully but **not continuing** to the next middleware (controller).
-
-**Root Cause**: The issue was related to incorrect configuration of NSign's middleware behavior.
-
-**Solution**: 
-1. **Removed incorrect callback**: The `OnSignatureVerificationSucceeded` callback was using wrong API
-2. **Let NSign handle continuation**: NSign's default behavior should automatically continue to next middleware after successful verification
-3. **Proper configuration**: Ensured that error handlers are configured but success path follows NSign's intended flow
-
-The key insight is that NSign middleware should **automatically** continue to the next middleware when signatures verify successfully - no custom callback needed.
-
 ## NSign Library Benefits
 
 ### ✅ **Professional Implementation**
@@ -160,7 +143,6 @@ The key insight is that NSign middleware should **automatically** continue to th
 ### ✅ **Flexible Configuration**
 - Multiple signature algorithms supported
 - Configurable signature parameters
-- Extensible key resolution strategies
 
 ### ✅ **Production Ready**
 - Performance optimized

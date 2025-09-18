@@ -236,10 +236,10 @@ namespace console_app
             }
             catch (Exception ex)
             {
-                WriteError($"Application failed with exception: {ex.Message}");
+                WriteError($"Application failed with exception: {ex}");
                 if (ex.InnerException != null)
                 {
-                    WriteError($"Inner Exception: {ex.InnerException.Message}");
+                    WriteError($"Inner Exception: {ex.InnerException}");
                 }
             }
 

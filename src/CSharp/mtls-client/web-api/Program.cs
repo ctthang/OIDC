@@ -1,18 +1,12 @@
-﻿using Duende.IdentityModel.Jwk;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
-using NSign;
 using NSign.AspNetCore;
 using NSign.Providers;
 using NSign.Signatures;
 using System.IdentityModel.Tokens.Jwt;
-using System.Runtime.ConstrainedExecution;
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using web_api;
 
