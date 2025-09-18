@@ -1,7 +1,9 @@
 # Solution Guide: ASP.NET Core OIDC mTLS Web Client & API with DPoP Support
 
 This solution demonstrates a secure integration between a Razor Pages web client using OpenID Connect (OIDC) and a console app using the Client Credentials with mTLS (mutual TLS) for the token endpoint and certificate-bound access tokens. Both applications support **DPoP (Demonstration of Proof-of-Possession)** per RFC 9449 for enhanced security.
-Both applications then will use the Access token to call an example REST API. 
+Both applications then will use the Access token to call an example REST API.
+
+Support **HTTP Message Signatures** per RFC 9421 for enhanced request integrity and authenticity. By default, the feature is disabled and can be enabled via configuration.
 
 ---
 
@@ -16,28 +18,30 @@ Both applications then will use the Access token to call an example REST API.
 ### Console app (Client Credentials Flow with mTLS and DPoP Support)
 
 - Demonstrates how a non-interactive client (console application) can obtain an access token using the OAuth2 Client Credentials flow with mutual TLS (mTLS) at the token endpoint.
-- **NEW**: Supports DPoP (Demonstration of Proof-of-Possession) per RFC 9449 for enhanced token security.
+- Supports DPoP (Demonstration of Proof-of-Possession) per RFC 9449 for enhanced token security.
 - Uses a client certificate to authenticate to the token endpoint and receive a certificate-bound access token.
-- **NEW**: Generates fresh DPoP proof tokens for both token requests and API calls, ensuring proper proof-of-possession validation.
+- Generates fresh DPoP proof tokens for both token requests and API calls, ensuring proper proof-of-possession validation.
+- Supports HTTP Message Signatures per RFC 9421 when calling the API endpoint.
 - Calls the HelloWorld API endpoint using the access token and the same client certificate for mTLS.
 - Validates the API response to ensure successful authentication and authorization.
 
 ### web-api (ASP.NET Core Web API with DPoP Validation)
 - Secured with JWT Bearer authentication.
-- **NEW**: Comprehensive DPoP proof validation according to RFC 9449 including:
+- Comprehensive DPoP proof validation according to RFC 9449 including:
   - DPoP proof JWT signature verification using embedded JWK
   - Access token binding validation via `cnf.jkt` claims
   - HTTP method (`htm`) and URI (`htu`) claim validation
   - Timestamp (`iat`) and nonce (`jti`) validation for replay protection
+- HTTP Message Signatures validation per RFC 9421 using the **NSign library**.
 - Validates the JWT signature and the `cnf` claim against the client certificate provided via mTLS.
-- **NEW**: Configurable DPoP enforcement mode - can require DPoP authentication or accept both DPoP and Bearer tokens.
+- Configurable DPoP enforcement mode - can require DPoP authentication or accept both DPoP and Bearer tokens.
 - Exposes a HelloWorld endpoint that requires a valid, certificate-bound access token.
 
 ---
 
 ## Configuration Steps
 
-Configuration steps to Ctr-F5 run the solution locally:
+Configuration steps to Ctrl-F5 run the solution locally:
 
 ### Prerequisites
 - .NET 8 SDK installed
@@ -396,11 +400,19 @@ Here's a checklist to help you troubleshoot on Identify web server:
     "Authority": "https://identify.example.com/runtime/oauth2",
     "Audience": "https://localhost:7102/",
     "EnforceDpop": true
+  },
+"HttpSignatures": {
+    "Enabled": true,
+    "MaxAge": 300
   }
 ```
 
 **DPoP Configuration:**
 - `EnforceDpop`: Set to `true` to require DPoP authentication for all requests, or `false` to accept both DPoP and Bearer tokens (default: `false`)
+
+**HTTP Message Signatures Configuration:**
+- `Enabled`: Set to `true` to enable HTTP Message Signatures validation, `false` to disable (default: `false`)
+- `MaxAge`: Maximum age in seconds for signature freshness validation (default: `300`)
 
 Make sure the self-signed CA that issued the client certificates is imported into the **LocalMachine\Trusted Root Certification Authorities** store on the server hosting the web API.
 
@@ -449,8 +461,9 @@ As a result , the web-api will start on `https://localhost:7102`. (see the confi
     <add key="CertificatePassword" value="[Certificate password]" />
     <add key="ApiEndpoint" value="https://localhost:7102/HelloWorld"/>
     <add key="UseDpop" value="True"/>
-    <add key="DpopAlg" value="PS384"/>
+    <add key="DpopAlg" value="PS256"/>
     <add key="DpopMethod" value="POST"/>
+    <add key="UseHttpSignatures" value="False"/>
   </appSettings>
 ```
 
@@ -458,6 +471,9 @@ As a result , the web-api will start on `https://localhost:7102`. (see the confi
 - `UseDpop`: Set to `True` to enable DPoP proof generation, `False` for standard Bearer token flow (default: `False`)
 - `DpopAlg`: Cryptographic algorithm for DPoP proof signing. Supported algorithms: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512` (default: `PS256`)
 - `DpopMethod`: HTTP method for token endpoint requests (default: `POST`)
+
+**HTTP Message Signatures Configuration Options:**
+- `UseHttpSignatures`: Set to `True` to enable HTTP Message Signatures generation, `False` to disable (default: `False`)
 
 Just keep `ApiEndpoint` as it is, this is the default API endpoint when running locally.
 
@@ -477,52 +493,16 @@ Hello, World!
 
 ---
 
-## DPoP (Demonstration of Proof-of-Possession) Features
-
-This solution implements **RFC 9449 - OAuth 2.0 Demonstration of Proof-of-Possession at the Application Layer (DPoP)** for enhanced security:
-
-### DPoP Security Benefits
-- **Proof of Possession**: Cryptographically proves the client possesses the private key associated with the access token
-- **Token Binding**: Access tokens are cryptographically bound to specific cryptographic keys via `cnf.jkt` claims
-- **Replay Protection**: Each API request requires a fresh DPoP proof with unique `jti` (nonce) and recent `iat` (timestamp)
-- **Request Binding**: DPoP proofs are bound to specific HTTP methods (`htm`) and URIs (`htu`) preventing cross-site usage
-
-### DPoP Implementation Details
-
-#### Console App (Client)
-- Generates RSA key pairs for DPoP proof signing using configurable algorithms
-- Creates DPoP proof JWTs with required headers: `typ`, `alg`, `jwk`
-- Includes proper payload claims: `htm`, `htu`, `iat`, `jti`, and `ath` (for API calls)
-- Uses fresh DPoP proofs for each request to prevent replay attacks
-- Supports both DPoP and Bearer token flows via configuration
-
-#### Web API (Resource Server)
-- Comprehensive DPoP proof validation per RFC 9449:
-  - **Signature Verification**: Validates DPoP proof signature against embedded JWK
-  - **Access Token Binding**: Verifies `cnf.jkt` claim in access token matches DPoP proof JWK thumbprint
-  - **Claim Validation**: Validates `htm`, `htu`, `iat`, and `jti` claims
-  - **Freshness Check**: Ensures DPoP proofs are recent (5-minute window)
-- Configurable enforcement mode (require DPoP vs. accept both DPoP and Bearer)
-- Detailed error responses with proper `WWW-Authenticate` headers
-- Support for both `Authorization: DPoP <token>` and `Authorization: Bearer <token>` schemes
-
-### DPoP vs. Bearer Token Comparison
-
-| Feature | Bearer Tokens | DPoP Tokens |
-|---------|---------------|-------------|
-| **Security** | Vulnerable to token theft/replay | Cryptographically bound to client key |
-| **Proof of Possession** | No | Yes - client must prove key ownership |
-| **Replay Protection** | Limited | Strong - fresh proof required per request |
-| **Token Binding** | Certificate binding only (`cnf.x5t#S256`) | Key binding (`cnf.jkt`) + Certificate binding |
-| **Request Binding** | No | Yes - bound to specific HTTP method and URL |
-| **Complexity** | Simple | More complex but significantly more secure |
-
 ## Notes
-- The authorize request from the `web-client` to Identify does not use mTLS, but the token endpoint does.
-- The API will reject requests if the access token is missing, invalid, or the client certificate does not match the `cnf` claim in the token.
+- The API will reject requests if the access token is missing, invalid.
 - **DPoP Notes**:
-  - When DPoP is enabled, the API validates both certificate binding (`cnf.x5t#S256`) and key binding (`cnf.jkt`)
+  - When DPoP is enabled, the API validates key binding (`cnf.jkt`)
   - DPoP proofs must be fresh (generated within 5 minutes) and unique (different `jti` values)
   - The console app automatically generates fresh DPoP proofs for each API call to comply with RFC 9449
   - DPoP enforcement can be configured per environment - useful for gradual rollout
+- **HTTP Message Signatures Notes**:
+  - Uses **NSign library** for professional RFC 9421 compliance
+  - When enabled, requests must include valid `Signature` and `Signature-Input` headers
+  - Signatures are validated against the expected components and algorithm
+  - Signature freshness is enforced (default 5-minute window)
 - All projects target .NET 8.
