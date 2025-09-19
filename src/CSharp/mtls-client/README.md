@@ -1,7 +1,9 @@
-# Solution Guide: ASP.NET Core OIDC mTLS Web Client & API
+# Solution Guide: ASP.NET Core OIDC mTLS Web Client & API with DPoP Support
 
-This solution demonstrates a secure integration between a Razor Pages web client using OpenID Connect (OIDC) and a console app using the Client Credentials with mTLS (mutual TLS) for the token endpoint and certificate-bound access tokens.
-Both applications then will use the Access token to call an example REST API. 
+This solution demonstrates a secure integration between a Razor Pages web client using OpenID Connect (OIDC) and a console app using the Client Credentials with mTLS (mutual TLS) for the token endpoint and certificate-bound access tokens. Both applications support **DPoP (Demonstration of Proof-of-Possession)** per RFC 9449 for enhanced security.
+Both applications then will use the Access token to call an example REST API.
+
+Support **HTTP Message Signatures** per RFC 9421 for enhanced request integrity and authenticity. By default, the feature is disabled and can be enabled via configuration.
 
 ---
 
@@ -10,26 +12,36 @@ Both applications then will use the Access token to call an example REST API.
 ### web-client (ASP.NET Core Razor Pages Application)
 - Provides OIDC login with an external provider (Identify Tenant).
 - Uses a client certificate for mTLS at the token endpoint.
-- Displays Access Token and Identity Token after login.
+- Displays Access Token after login.
 - Allows users to call the HelloWorld API through a server-side proxy that includes the client certificate in the HTTPS connection.
 
-### Console app (Client Credentials Flow with mTLS)
+### Console app (Client Credentials Flow with mTLS and DPoP Support)
 
 - Demonstrates how a non-interactive client (console application) can obtain an access token using the OAuth2 Client Credentials flow with mutual TLS (mTLS) at the token endpoint.
+- Supports DPoP (Demonstration of Proof-of-Possession) per RFC 9449 for enhanced token security.
 - Uses a client certificate to authenticate to the token endpoint and receive a certificate-bound access token.
+- Generates fresh DPoP proof tokens for both token requests and API calls, ensuring proper proof-of-possession validation.
+- Supports HTTP Message Signatures per RFC 9421 when calling the API endpoint.
 - Calls the HelloWorld API endpoint using the access token and the same client certificate for mTLS.
 - Validates the API response to ensure successful authentication and authorization.
 
-### web-api (ASP.NET Core Web API)
+### web-api (ASP.NET Core Web API with DPoP Validation)
 - Secured with JWT Bearer authentication.
+- Comprehensive DPoP proof validation according to RFC 9449 including:
+  - DPoP proof JWT signature verification using embedded JWK
+  - Access token binding validation via `cnf.jkt` claims
+  - HTTP method (`htm`) and URI (`htu`) claim validation
+  - Timestamp (`iat`) and nonce (`jti`) validation for replay protection
+- HTTP Message Signatures validation per RFC 9421 using the **NSign library**.
 - Validates the JWT signature and the `cnf` claim against the client certificate provided via mTLS.
+- Configurable DPoP enforcement mode - can require DPoP authentication or accept both DPoP and Bearer tokens.
 - Exposes a HelloWorld endpoint that requires a valid, certificate-bound access token.
 
 ---
 
 ## Configuration Steps
 
-Configuration steps to Ctr-F5 run the solution locally:
+Configuration steps to Ctrl-F5 run the solution locally:
 
 ### Prerequisites
 - .NET 8 SDK installed
@@ -386,9 +398,21 @@ Here's a checklist to help you troubleshoot on Identify web server:
 ```JSON
 "Jwt": {
     "Authority": "https://identify.example.com/runtime/oauth2",
-    "Audience": "https://localhost:7102/"
+    "Audience": "https://localhost:7102/",
+    "EnforceDpop": true
+  },
+"HttpSignatures": {
+    "Enabled": true,
+    "MaxAge": 300
   }
 ```
+
+**DPoP Configuration:**
+- `EnforceDpop`: Set to `true` to require DPoP authentication for all requests, or `false` to accept both DPoP and Bearer tokens (default: `false`)
+
+**HTTP Message Signatures Configuration:**
+- `Enabled`: Set to `true` to enable HTTP Message Signatures validation, `false` to disable (default: `false`)
+- `MaxAge`: Maximum age in seconds for signature freshness validation (default: `300`)
 
 Make sure the self-signed CA that issued the client certificates is imported into the **LocalMachine\Trusted Root Certification Authorities** store on the server hosting the web API.
 
@@ -418,7 +442,7 @@ As a result , the web-api will start on `https://localhost:7102`. (see the confi
         Where, `jwk01` and `jwk02` are JSON Web Key objects.
 
 
-     - **Allowed Callback URIs**: Fill a dummy value, e.g. `https://identify.test.example/runtime`
+     - **Allowed Callback URIs**: Fill a dummy value, e.g. `https://identify.test.example.com/runtime`
      - **Security token audiences**: `https://localhost:7102/` 
 
 
@@ -436,102 +460,26 @@ As a result , the web-api will start on `https://localhost:7102`. (see the confi
     <add key="CertificatePath" value="[Path to your certificate]" />
     <add key="CertificatePassword" value="[Certificate password]" />
     <add key="ApiEndpoint" value="https://localhost:7102/HelloWorld"/>
+    <add key="UseDpop" value="True"/>
+    <add key="DpopAlg" value="PS256"/>
+    <add key="DpopMethod" value="POST"/>
+    <add key="UseHttpSignatures" value="False"/>
   </appSettings>
 ```
+
+**DPoP Configuration Options:**
+- `UseDpop`: Set to `True` to enable DPoP proof generation, `False` for standard Bearer token flow (default: `False`)
+- `DpopAlg`: Cryptographic algorithm for DPoP proof signing. Supported algorithms: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512` (default: `PS256`)
+- `DpopMethod`: HTTP method for token endpoint requests (default: `POST`)
+
+**HTTP Message Signatures Configuration Options:**
+- `UseHttpSignatures`: Set to `True` to enable HTTP Message Signatures generation, `False` to disable (default: `False`)
 
 Just keep `ApiEndpoint` as it is, this is the default API endpoint when running locally.
 
 4. Run the console-app:dotnet run --project ./console-app/console-app.csproj
 
 As result, the console-app will start.
-
-### Configure the web-client
-
-1. Prepare your OAuth/OIDC connection in Identify Tenant
-
-   Log in **Admin UI portal**. Create a new OIDC application in your Identify Tenant with the following settings:
-   - Connection tab:
-   	 - **Client ID**: Your application client ID
-	 - **Client Secret**: Fill a dummy value
-     - **Client jwks**: input its JWK format as generate above
-
-     
-        ```JSON	 
-	         {
-            "keys": [
-                jwk01, jwk02
-            ]
-        }
-        ```
-
-        Where, `jwk01` and `jwk02` are JSON Web Key objects.
-
-
-     - **Allowed Callback URIs**: `https://localhost:5254/signin-oidc`
-     - **Security token audiences**: `https://localhost:7102/` 
-
-
-   - Security tab:
-     - **JWS algorithm**: `RSASigning`
-     - **Allow Code Flow**: Enabled
-
-2. Place your client certificate (PFX) in a secure location and update the path and password in configuration.
-3. Update `appsettings.json` in the web-client project with your Identify Tenant details:
-
-```JSON
-"OIDC": {
-      "Authority": "https://identify.example.com/runtime/oauth2",
-      "ClientId": "[Your client Id]",
-      "CallbackPath": "/signin-oidc",
-      "Certificate": {
-        "Path": "[full file path to your PFX certificate (include a private key)]",
-        "Password": "[the certificate password]"
-      }
-    }
-```
-Api configuration:
-
-```JSON
-"Api": {
-    "HelloWorldUrl": "https://localhost:7102/HelloWorld"
-  }
-```
-Just keep it as it is, this is the default API endpoint when running locally.
-
-4. Run the web-client:dotnet run --project ./web-client/web-client.csproj
-   As result, the web-client will start on `https://localhost:5254`. (see the configuration in `launchSettings.json`)
-        
----
-
-## How to Use the Solution using console-app
-
-### Run the web-api
-
-- Run the web-api:dotnet run --project ./web-api/web-api.csproj
-
-### Run the console-app
-
-#### Run the console-app
-
-- Run the console-app:dotnet run --project ./console-app/console-app.csproj
-
-#### How it works
-
-- The console app loads the client certificate (PFX) from disk.
-- It sends a token request to the Identify Tenant's token endpoint using mTLS (client certificate) using Client Credentials grant type.
-- Receives an access token with a `cnf` claim binding it to the certificate.
-- Uses the access token and client certificate to call the HelloWorld endpoint.
-- Displays the API response in the console.
-
-### Expected Response
-Hello, World!
----
-
-## How to Use the Solution using web-client
-
-### web-client login with Identify Tenant
-- Start the web-client and log in with your Identify tenant via the browser.
-- After successful authentication, the home page will display your Access Token and Identity Token.
 
 ### Call the HelloWorld API
 - Use the web-client UI or a tool like `curl` to call the HelloWorld endpoint.
@@ -542,9 +490,19 @@ Hello, World!
 
 ### Expected Response
 Hello, World!
+
 ---
 
 ## Notes
-- The authorize request from the `web-client` to Identify does not use mTLS, but the token endpoint does.
-- The API will reject requests if the access token is missing, invalid, or the client certificate does not match the `cnf` claim in the token.
+- The API will reject requests if the access token is missing, invalid.
+- **DPoP Notes**:
+  - When DPoP is enabled, the API validates key binding (`cnf.jkt`)
+  - DPoP proofs must be fresh (generated within 5 minutes) and unique (different `jti` values)
+  - The console app automatically generates fresh DPoP proofs for each API call to comply with RFC 9449
+  - DPoP enforcement can be configured per environment - useful for gradual rollout
+- **HTTP Message Signatures Notes**:
+  - Uses **NSign library** for professional RFC 9421 compliance
+  - When enabled, requests must include valid `Signature` and `Signature-Input` headers
+  - Signatures are validated against the expected components and algorithm
+  - Signature freshness is enforced (default 5-minute window)
 - All projects target .NET 8.
