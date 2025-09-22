@@ -96,7 +96,6 @@ namespace console_app
                 var handler = new HttpClientHandler();
                 // Ignore SSL validation (for development only)
                 handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
-                WriteWarning("SSL certificate validation is disabled (development mode)");
                 
                 // Include the client certificate for mTLS token requests
                 handler.ClientCertificates.Add(clientCert);
@@ -110,7 +109,6 @@ namespace console_app
                 var request = new ClientCredentialsTokenRequest
                 {
                     Address = tokenEndpoint,
-                    ClientId = clientId,
                     GrantType = "client_credentials"
                 };
                 request.Parameters.Add("client_id", clientId);
