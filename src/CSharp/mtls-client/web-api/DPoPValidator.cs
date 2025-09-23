@@ -147,6 +147,10 @@ namespace web_api
                         return (false, "DPoP's ath does not match the received Access token.");
                     }
                 }
+                else
+                {
+                    return (false, "Missing ath claim in DPoP proof when access token is presented.");
+                }
 
                 Console.WriteLine($"   [INFO] jti claim present: {jti} (replay protection - should be tracked in production)");
                 

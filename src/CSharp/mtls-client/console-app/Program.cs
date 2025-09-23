@@ -8,9 +8,6 @@ using NSign.Client;
 using NSign.Providers;
 using NSign.Signatures;
 using System.Configuration;
-using System.Net;
-using System.Net.Http;
-using System.Runtime.Intrinsics.Arm;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -224,7 +221,7 @@ namespace console_app
             Console.Read();
         }
 
-        static async Task<HttpResponseMessage> CallRestApiWithOidcClientAsync(string apiEndpoint, string dpopKey, string accessToken, string authority)
+        private static async Task<HttpResponseMessage> CallRestApiWithOidcClientAsync(string apiEndpoint, string dpopKey, string accessToken, string authority)
         {
             var oidcClient = new OidcClient(new OidcClientOptions()
             {
@@ -237,7 +234,7 @@ namespace console_app
             return response;
         }
 
-        static async Task<HttpResponseMessage> CallRestApiWithStandardHandlerAsync(string apiEndpoint, string dpop, string tokenType, string accessToken, bool useHttpSignatures, RSA? rsaKey, JsonWebKey jsonWebKey)
+        private static async Task<HttpResponseMessage> CallRestApiWithStandardHandlerAsync(string apiEndpoint, string dpop, string tokenType, string accessToken, bool useHttpSignatures, RSA? rsaKey, JsonWebKey jsonWebKey)
         {
             var apiHandler = new HttpClientHandler();
 
@@ -275,10 +272,10 @@ namespace console_app
             return response;
         }
 
-        static HttpMessageHandler CreateDPoPHandler(OidcClient client,
-        string proofKey,
-        string accessToken,
-        HttpMessageHandler? apiInnerHandler = null)
+        private static HttpMessageHandler CreateDPoPHandler(OidcClient client,
+            string proofKey,
+            string accessToken,
+            HttpMessageHandler? apiInnerHandler = null)
         {
             var apiDpopHandler = new ProofTokenMessageHandler(proofKey, apiInnerHandler ?? new HttpClientHandler());
 
@@ -292,7 +289,7 @@ namespace console_app
             return handler;
         }
 
-        public static void ConfigureServices(IServiceCollection services, RSA rsa, string keyId)
+        private static void ConfigureServices(IServiceCollection services, RSA rsa, string keyId)
         {
             services.AddHttpClient("signedClient")
                 .AddContentDigestAndSigningHandlers()
@@ -324,7 +321,7 @@ namespace console_app
         }
 
         // Create HTTP client with custom HTTP Message Signatures support (RFC 9421)
-        static HttpClient CreateHttpClientWithSignatures(HttpClientHandler handler, RSA rsaKey, string keyId)
+        private static HttpClient CreateHttpClientWithSignatures(HttpClientHandler handler, RSA rsaKey, string keyId)
         {
             WriteInfo("Configuring HTTP Message Signatures per RFC 9421 (Custom Implementation)");
 
@@ -354,7 +351,7 @@ namespace console_app
             }
         }
 
-        static RSA FromJwk(JsonWebKey jsonWebKey)
+        private static RSA FromJwk(JsonWebKey jsonWebKey)
         {
             var nBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.N);
             var eBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.E);
@@ -384,35 +381,35 @@ namespace console_app
         }
 
         // Helper methods for colorful console output
-        static void WriteInfo(string message)
+        private static void WriteInfo(string message)
         {
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine($"ℹ️  {message}");
             Console.ResetColor();
         }
 
-        static void WriteSuccess(string message)
+        private static void WriteSuccess(string message)
         {
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine($"✅ {message}");
             Console.ResetColor();
         }
 
-        static void WriteWarning(string message)
+        private static void WriteWarning(string message)
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine($"⚠️  {message}");
             Console.ResetColor();
         }
 
-        static void WriteError(string message)
+        private static void WriteError(string message)
         {
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine($"❌ {message}");
             Console.ResetColor();
         }
 
-        static void WriteHeader(string message)
+        private static void WriteHeader(string message)
         {
             Console.ForegroundColor = ConsoleColor.Magenta;
             Console.WriteLine($"\n🚀 {message}");
@@ -420,7 +417,7 @@ namespace console_app
             Console.ResetColor();
         }
 
-        static void WriteData(string label, string value)
+        private static void WriteData(string label, string value)
         {
             Console.ForegroundColor = ConsoleColor.DarkGray;
             Console.Write($"{label}: ");
@@ -429,12 +426,11 @@ namespace console_app
             Console.ResetColor();
         }
 
-        static void WriteJson(string json)
+        private static void WriteJson(string json)
         {
             Console.ForegroundColor = ConsoleColor.DarkYellow;
             Console.WriteLine(json);
             Console.ResetColor();
         }
-
     }
 }

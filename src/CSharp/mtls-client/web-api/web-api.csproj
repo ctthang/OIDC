@@ -6,11 +6,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>web_api</RootNamespace>
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Remove="HTTP_MESSAGE_SIGNATURES_IMPLEMENTATION.md" />
-  </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Duende.IdentityModel" Version="7.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.*" />
