@@ -31,7 +31,7 @@ Support **HTTP Message Signatures** per RFC 9421 for enhanced request integrity 
   - DPoP proof JWT signature verification using embedded JWK
   - Access token binding validation via `cnf.jkt` claims
   - HTTP method (`htm`) and URI (`htu`) claim validation
-  - Timestamp (`iat`) and nonce (`jti`) validation for replay protection
+  - `jti` validation for replay protection is ignored for this demo web api.
 - HTTP Message Signatures validation per RFC 9421 using the **NSign library**.
 - Validates the JWT signature and the `cnf` claim against the client certificate provided via mTLS.
 - Configurable DPoP enforcement mode - can require DPoP authentication or accept both DPoP and Bearer tokens.
@@ -464,6 +464,7 @@ As a result , the web-api will start on `https://localhost:7102`. (see the confi
     <add key="DpopAlg" value="PS256"/>
     <add key="DpopMethod" value="POST"/>
     <add key="UseHttpSignatures" value="False"/>
+    <add key="UseOidcClientPackage" value="True"/>
   </appSettings>
 ```
 
@@ -476,6 +477,9 @@ As a result , the web-api will start on `https://localhost:7102`. (see the confi
 - `UseHttpSignatures`: Set to `True` to enable HTTP Message Signatures generation, `False` to disable (default: `False`)
 
 Just keep `ApiEndpoint` as it is, this is the default API endpoint when running locally.
+
+The Console app demonstrates calling the REST API with DPoP proof and Access token using both the `Duende.IdentityModel.OidcClient` package and the built-in .NET `HttpClientHandler`.
+Control the usage of `Duende.IdentityModel.OidcClient` for API calls via the `UseOidcClientPackage` setting.
 
 4. Run the console-app:dotnet run --project ./console-app/console-app.csproj
 

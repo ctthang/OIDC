@@ -1,4 +1,5 @@
-﻿using Duende.IdentityModel.OidcClient.DPoP;
+﻿using Duende.IdentityModel.OidcClient;
+using Duende.IdentityModel.OidcClient.DPoP;
 using IdentityModel.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -7,7 +8,6 @@ using NSign.Client;
 using NSign.Providers;
 using NSign.Signatures;
 using System.Configuration;
-using System.Runtime.Intrinsics.Arm;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -96,7 +96,6 @@ namespace console_app
                 var handler = new HttpClientHandler();
                 // Ignore SSL validation (for development only)
                 handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
-                WriteWarning("SSL certificate validation is disabled (development mode)");
                 
                 // Include the client certificate for mTLS token requests
                 handler.ClientCertificates.Add(clientCert);
@@ -110,7 +109,6 @@ namespace console_app
                 var request = new ClientCredentialsTokenRequest
                 {
                     Address = tokenEndpoint,
-                    ClientId = clientId,
                     GrantType = "client_credentials"
                 };
                 request.Parameters.Add("client_id", clientId);
@@ -148,27 +146,13 @@ namespace console_app
 
                 // Now make an API call using the access token
                 WriteHeader("API Call");
-                var apiHandler = new HttpClientHandler();
-                
-                HttpClient apiHttpClient;
-                if (useHttpSignatures && rsaKey != null)
-                {
-                    var keyId = Base64UrlEncoder.Encode(SHA256.Create().ComputeHash(jsonWebKey.ComputeJwkThumbprint()));
-                    // Create HTTP client with custom HTTP Message Signatures support
-                    WriteInfo("Creating HTTP client with custom HTTP Message Signatures support");
-                    apiHttpClient = CreateHttpClientWithSignatures(apiHandler, rsaKey, keyId);
-                }
-                else
-                {
-                    apiHttpClient = new HttpClient(apiHandler);
-                }
 
                 string apiDpopToken = string.Empty;
                 if (useDpop)
                 {
                     WriteHeader("Generate New DPoP Token for API Call");
                     WriteInfo("Generating fresh DPoP token for API request per RFC 9449");
-                    
+
                     // Generate a new DPoP proof for the API call with correct URL and method
                     var apiDpopRequest = new DPoPProofRequest
                     {
@@ -176,29 +160,20 @@ namespace console_app
                         Method = "GET", // API call method
                         AccessToken = tokenResponse.AccessToken // Include access token for ath claim
                     };
-                    
+
                     // Reuse the same JWK but create a fresh proof
                     var apiDpopTokenFactory = new DPoPProofTokenFactory(jwk);
                     apiDpopToken = apiDpopTokenFactory.CreateProofToken(apiDpopRequest).ProofToken;
-                    
+
                     WriteData("API DPoP Token", apiDpopToken);
                     WriteSuccess("Fresh DPoP token generated for API call");
 
-                    // Add the fresh DPoP header for API request
-                    apiHttpClient.DefaultRequestHeaders.Clear(); // Clear any existing headers
-                    apiHttpClient.DefaultRequestHeaders.Add("DPoP", apiDpopToken);
-                    WriteInfo("Fresh DPoP header added to API request");
                 }
-                
-                apiHttpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(tokenResponse.TokenType, tokenResponse.AccessToken);
-                WriteData("Authorization Scheme", tokenResponse.TokenType);
-                
-                WriteInfo("Sending HTTP request with custom HTTP Message Signatures");
-                WriteData("API Endpoint", apiEndpoint);
 
-                // Remove client certificate from the handler before making the API call
-                apiHandler.ClientCertificates.Clear();
-                var response = await apiHttpClient.GetAsync(apiEndpoint);
+                var useOidcClientPackage = ConfigurationManager.AppSettings["UseOidcClientPackage"] == "True";
+                var response = useOidcClientPackage && useDpop ?
+                        await CallRestApiWithOidcClientAsync(apiEndpoint, jwk, tokenResponse.AccessToken, authority) :
+                        await CallRestApiWithStandardHandlerAsync(apiEndpoint, apiDpopToken, tokenResponse.TokenType, tokenResponse.AccessToken, useHttpSignatures, rsaKey, jsonWebKey);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -246,7 +221,75 @@ namespace console_app
             Console.Read();
         }
 
-        public static void ConfigureServices(IServiceCollection services, RSA rsa, string keyId)
+        private static async Task<HttpResponseMessage> CallRestApiWithOidcClientAsync(string apiEndpoint, string dpopKey, string accessToken, string authority)
+        {
+            var oidcClient = new OidcClient(new OidcClientOptions()
+            {
+                Authority = authority
+            });
+            var handler = CreateDPoPHandler(oidcClient, dpopKey, accessToken);
+            var httpClient = new HttpClient(handler);
+
+            var response = await httpClient.GetAsync(apiEndpoint);
+            return response;
+        }
+
+        private static async Task<HttpResponseMessage> CallRestApiWithStandardHandlerAsync(string apiEndpoint, string dpop, string tokenType, string accessToken, bool useHttpSignatures, RSA? rsaKey, JsonWebKey jsonWebKey)
+        {
+            var apiHandler = new HttpClientHandler();
+
+            HttpClient apiHttpClient;
+            if (useHttpSignatures && rsaKey != null)
+            {
+                var keyId = Base64UrlEncoder.Encode(SHA256.Create().ComputeHash(jsonWebKey.ComputeJwkThumbprint()));
+                // Create HTTP client with custom HTTP Message Signatures support
+                WriteInfo("Creating HTTP client with custom HTTP Message Signatures support");
+                apiHttpClient = CreateHttpClientWithSignatures(apiHandler, rsaKey, keyId);
+            }
+            else
+            {
+                apiHttpClient = new HttpClient(apiHandler);
+            }
+
+            // Add the fresh DPoP header for API request
+            if (!string.IsNullOrEmpty(dpop))
+            {
+                apiHttpClient.DefaultRequestHeaders.Clear(); // Clear any existing headers
+                apiHttpClient.DefaultRequestHeaders.Add("DPoP", dpop);
+                WriteInfo("Fresh DPoP header added to API request");
+            }
+
+            apiHttpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(tokenType, accessToken);
+            WriteData("Authorization Scheme", tokenType);
+
+            WriteInfo("Sending HTTP request with custom HTTP Message Signatures");
+            WriteData("API Endpoint", apiEndpoint);
+
+            // Remove client certificate from the handler before making the API call
+            apiHandler.ClientCertificates.Clear();
+
+            var response = await apiHttpClient.GetAsync(apiEndpoint);
+            return response;
+        }
+
+        private static HttpMessageHandler CreateDPoPHandler(OidcClient client,
+            string proofKey,
+            string accessToken,
+            HttpMessageHandler? apiInnerHandler = null)
+        {
+            var apiDpopHandler = new ProofTokenMessageHandler(proofKey, apiInnerHandler ?? new HttpClientHandler());
+
+            var handler = new RefreshTokenDelegatingHandler(
+                client,
+                accessToken,
+                "any",
+                "DPoP",
+                apiDpopHandler);
+
+            return handler;
+        }
+
+        private static void ConfigureServices(IServiceCollection services, RSA rsa, string keyId)
         {
             services.AddHttpClient("signedClient")
                 .AddContentDigestAndSigningHandlers()
@@ -278,7 +321,7 @@ namespace console_app
         }
 
         // Create HTTP client with custom HTTP Message Signatures support (RFC 9421)
-        static HttpClient CreateHttpClientWithSignatures(HttpClientHandler handler, RSA rsaKey, string keyId)
+        private static HttpClient CreateHttpClientWithSignatures(HttpClientHandler handler, RSA rsaKey, string keyId)
         {
             WriteInfo("Configuring HTTP Message Signatures per RFC 9421 (Custom Implementation)");
 
@@ -308,7 +351,7 @@ namespace console_app
             }
         }
 
-        static RSA FromJwk(JsonWebKey jsonWebKey)
+        private static RSA FromJwk(JsonWebKey jsonWebKey)
         {
             var nBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.N);
             var eBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.E);
@@ -338,35 +381,35 @@ namespace console_app
         }
 
         // Helper methods for colorful console output
-        static void WriteInfo(string message)
+        private static void WriteInfo(string message)
         {
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine($"ℹ️  {message}");
             Console.ResetColor();
         }
 
-        static void WriteSuccess(string message)
+        private static void WriteSuccess(string message)
         {
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine($"✅ {message}");
             Console.ResetColor();
         }
 
-        static void WriteWarning(string message)
+        private static void WriteWarning(string message)
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine($"⚠️  {message}");
             Console.ResetColor();
         }
 
-        static void WriteError(string message)
+        private static void WriteError(string message)
         {
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine($"❌ {message}");
             Console.ResetColor();
         }
 
-        static void WriteHeader(string message)
+        private static void WriteHeader(string message)
         {
             Console.ForegroundColor = ConsoleColor.Magenta;
             Console.WriteLine($"\n🚀 {message}");
@@ -374,7 +417,7 @@ namespace console_app
             Console.ResetColor();
         }
 
-        static void WriteData(string label, string value)
+        private static void WriteData(string label, string value)
         {
             Console.ForegroundColor = ConsoleColor.DarkGray;
             Console.Write($"{label}: ");
@@ -383,12 +426,11 @@ namespace console_app
             Console.ResetColor();
         }
 
-        static void WriteJson(string json)
+        private static void WriteJson(string json)
         {
             Console.ForegroundColor = ConsoleColor.DarkYellow;
             Console.WriteLine(json);
             Console.ResetColor();
         }
-
     }
 }
