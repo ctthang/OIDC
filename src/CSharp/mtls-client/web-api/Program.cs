@@ -345,7 +345,7 @@ static RSA? ExtractPublicKeyFromDPoP(HttpContext httpContext, out string keyId)
         var jwkJson = JsonSerializer.Serialize(jwkObj);
 
         // Create JsonWebKey from the embedded JWK
-        var jsonWebKey = new Microsoft.IdentityModel.Tokens.JsonWebKey(jwkJson);
+        var jsonWebKey = new JsonWebKey(jwkJson);
 
         keyId = Base64UrlEncoder.Encode(SHA256.Create().ComputeHash(jsonWebKey.ComputeJwkThumbprint()));
         return FromJwk(jsonWebKey);
@@ -354,7 +354,7 @@ static RSA? ExtractPublicKeyFromDPoP(HttpContext httpContext, out string keyId)
 }
 
 // Only need public RSA key from JWK
-static RSA FromJwk(Microsoft.IdentityModel.Tokens.JsonWebKey jsonWebKey)
+static RSA FromJwk(JsonWebKey jsonWebKey)
 {
     var nBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.N);
     var eBytes = Base64UrlEncoder.DecodeBytes(jsonWebKey.E);

@@ -1,6 +1,8 @@
+using Duende.IdentityModel;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace web_api
@@ -75,8 +77,8 @@ namespace web_api
                 
                 Console.WriteLine($"   [INFO] JWK thumbprint calculated: {jwkThumbprint}");
                 
-                // STEP 5: Validate access token binding (cnf.jkt claim)
-                var tokenBindingValidation = ValidateAccessTokenBinding(httpContext, jwkThumbprint);
+                // STEP 5: Validate access token binding (cnf.jkt claim) and ath (access token hash)
+                var tokenBindingValidation = ValidateAccessTokenBinding(httpContext, jwkThumbprint, out string accessTokenString);
                 if (!tokenBindingValidation.IsValid)
                 {
                     return (false, $"Access token binding validation failed: {tokenBindingValidation.ErrorMessage}");
@@ -121,15 +123,31 @@ namespace web_api
                 {
                     return (false, $"DPoP proof token is too old or from the future. Time difference: {timeDifference} minutes (max 5 minutes allowed)");
                 }
-                
+
                 // Validate jti claim (JWT ID) - must be unique for replay protection
+                // This is a demo resource server, ignore implementing jti nonce tracking to prevent replay attacks
                 if (!payload.TryGetValue("jti", out var jti) || string.IsNullOrEmpty(jti?.ToString()))
                 {
                     return (false, "Missing or empty jti claim in DPoP proof");
                 }
-                
-                // This is a demo resource server, ignore implementing jti nonce tracking to prevent replay attacks
-                
+
+                /*
+                 * When the DPoP proof is used in conjunction with the presentation of an access token in protected resource access (see Section 7), the DPoP proof MUST also contain the following claim:
+                ath: Hash of the access token. The value MUST be the result of a base64url encoding (as defined in Section 2 of [RFC7515]) the SHA-256 [SHS] hash of the ASCII encoding of the associated access token's value.
+                 */
+                if (payload.TryGetValue("ath", out var ath))
+                {
+                    // hash the access token and do matching validation
+                    using var sha256 = SHA256.Create();
+                    var hash = sha256.ComputeHash(Encoding.ASCII.GetBytes(accessTokenString));
+                    var expectedAth = Base64Url.Encode(hash);
+
+                    if (!ath.Equals(expectedAth))
+                    {
+                        return (false, "DPoP's ath does not match the received Access token.");
+                    }
+                }
+
                 Console.WriteLine($"   [INFO] jti claim present: {jti} (replay protection - should be tracked in production)");
                 
                 Console.WriteLine($"   [SUCCESS] DPoP proof claims validated (htm: {htm}, htu: {htu}, iat: {issuedAt:yyyy-MM-dd HH:mm:ss} UTC)");
@@ -145,10 +163,11 @@ namespace web_api
         }
 
         // Helper method to validate access token binding via cnf.jkt claim
-        public static (bool IsValid, string ErrorMessage) ValidateAccessTokenBinding(HttpContext httpContext, string expectedJwkThumbprint)
+        public static (bool IsValid, string ErrorMessage) ValidateAccessTokenBinding(HttpContext httpContext, string expectedJwkThumbprint, out string accessTokenString)
         {
             try
             {
+                accessTokenString = string.Empty;
                 // Get access token from Authorization header
                 var authHeader = httpContext.Request.Headers["Authorization"].FirstOrDefault();
                 if (string.IsNullOrEmpty(authHeader))
@@ -157,7 +176,6 @@ namespace web_api
                 }
                 
                 // Extract access token string
-                string accessTokenString;
                 if (authHeader.StartsWith("DPoP ", StringComparison.OrdinalIgnoreCase))
                 {
                     accessTokenString = authHeader.Substring(5).Trim();
@@ -213,12 +231,15 @@ namespace web_api
                     Console.WriteLine($"      Access token cnf.jkt:      {accessTokenJwkThumbprint}");
                     return (false, "JWK thumbprint mismatch between DPoP proof and access token cnf.jkt claim");
                 }
+
+                // Validate 
                 
                 Console.WriteLine($"   [SUCCESS] JWK thumbprint match confirmed: {expectedJwkThumbprint}");
                 return (true, string.Empty);
             }
             catch (Exception ex)
             {
+                accessTokenString = string.Empty;
                 return (false, $"Exception during access token binding validation: {ex.Message}");
             }
         }

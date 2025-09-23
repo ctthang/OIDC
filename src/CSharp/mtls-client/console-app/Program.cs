@@ -1,4 +1,5 @@
-﻿using Duende.IdentityModel.OidcClient.DPoP;
+﻿using Duende.IdentityModel.OidcClient;
+using Duende.IdentityModel.OidcClient.DPoP;
 using IdentityModel.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -7,6 +8,8 @@ using NSign.Client;
 using NSign.Providers;
 using NSign.Signatures;
 using System.Configuration;
+using System.Net;
+using System.Net.Http;
 using System.Runtime.Intrinsics.Arm;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -146,27 +149,13 @@ namespace console_app
 
                 // Now make an API call using the access token
                 WriteHeader("API Call");
-                var apiHandler = new HttpClientHandler();
-                
-                HttpClient apiHttpClient;
-                if (useHttpSignatures && rsaKey != null)
-                {
-                    var keyId = Base64UrlEncoder.Encode(SHA256.Create().ComputeHash(jsonWebKey.ComputeJwkThumbprint()));
-                    // Create HTTP client with custom HTTP Message Signatures support
-                    WriteInfo("Creating HTTP client with custom HTTP Message Signatures support");
-                    apiHttpClient = CreateHttpClientWithSignatures(apiHandler, rsaKey, keyId);
-                }
-                else
-                {
-                    apiHttpClient = new HttpClient(apiHandler);
-                }
 
                 string apiDpopToken = string.Empty;
                 if (useDpop)
                 {
                     WriteHeader("Generate New DPoP Token for API Call");
                     WriteInfo("Generating fresh DPoP token for API request per RFC 9449");
-                    
+
                     // Generate a new DPoP proof for the API call with correct URL and method
                     var apiDpopRequest = new DPoPProofRequest
                     {
@@ -174,29 +163,20 @@ namespace console_app
                         Method = "GET", // API call method
                         AccessToken = tokenResponse.AccessToken // Include access token for ath claim
                     };
-                    
+
                     // Reuse the same JWK but create a fresh proof
                     var apiDpopTokenFactory = new DPoPProofTokenFactory(jwk);
                     apiDpopToken = apiDpopTokenFactory.CreateProofToken(apiDpopRequest).ProofToken;
-                    
+
                     WriteData("API DPoP Token", apiDpopToken);
                     WriteSuccess("Fresh DPoP token generated for API call");
 
-                    // Add the fresh DPoP header for API request
-                    apiHttpClient.DefaultRequestHeaders.Clear(); // Clear any existing headers
-                    apiHttpClient.DefaultRequestHeaders.Add("DPoP", apiDpopToken);
-                    WriteInfo("Fresh DPoP header added to API request");
                 }
-                
-                apiHttpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(tokenResponse.TokenType, tokenResponse.AccessToken);
-                WriteData("Authorization Scheme", tokenResponse.TokenType);
-                
-                WriteInfo("Sending HTTP request with custom HTTP Message Signatures");
-                WriteData("API Endpoint", apiEndpoint);
 
-                // Remove client certificate from the handler before making the API call
-                apiHandler.ClientCertificates.Clear();
-                var response = await apiHttpClient.GetAsync(apiEndpoint);
+                var useOidcClientPackage = ConfigurationManager.AppSettings["UseOidcClientPackage"] == "True";
+                var response = useOidcClientPackage && useDpop ?
+                        await CallRestApiWithOidcClientAsync(apiEndpoint, jwk, tokenResponse.AccessToken, authority) :
+                        await CallRestApiWithStandardHandlerAsync(apiEndpoint, apiDpopToken, tokenResponse.TokenType, tokenResponse.AccessToken, useHttpSignatures, rsaKey, jsonWebKey);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -242,6 +222,74 @@ namespace console_app
             }
 
             Console.Read();
+        }
+
+        static async Task<HttpResponseMessage> CallRestApiWithOidcClientAsync(string apiEndpoint, string dpopKey, string accessToken, string authority)
+        {
+            var oidcClient = new OidcClient(new OidcClientOptions()
+            {
+                Authority = authority
+            });
+            var handler = CreateDPoPHandler(oidcClient, dpopKey, accessToken);
+            var httpClient = new HttpClient(handler);
+
+            var response = await httpClient.GetAsync(apiEndpoint);
+            return response;
+        }
+
+        static async Task<HttpResponseMessage> CallRestApiWithStandardHandlerAsync(string apiEndpoint, string dpop, string tokenType, string accessToken, bool useHttpSignatures, RSA? rsaKey, JsonWebKey jsonWebKey)
+        {
+            var apiHandler = new HttpClientHandler();
+
+            HttpClient apiHttpClient;
+            if (useHttpSignatures && rsaKey != null)
+            {
+                var keyId = Base64UrlEncoder.Encode(SHA256.Create().ComputeHash(jsonWebKey.ComputeJwkThumbprint()));
+                // Create HTTP client with custom HTTP Message Signatures support
+                WriteInfo("Creating HTTP client with custom HTTP Message Signatures support");
+                apiHttpClient = CreateHttpClientWithSignatures(apiHandler, rsaKey, keyId);
+            }
+            else
+            {
+                apiHttpClient = new HttpClient(apiHandler);
+            }
+
+            // Add the fresh DPoP header for API request
+            if (!string.IsNullOrEmpty(dpop))
+            {
+                apiHttpClient.DefaultRequestHeaders.Clear(); // Clear any existing headers
+                apiHttpClient.DefaultRequestHeaders.Add("DPoP", dpop);
+                WriteInfo("Fresh DPoP header added to API request");
+            }
+
+            apiHttpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(tokenType, accessToken);
+            WriteData("Authorization Scheme", tokenType);
+
+            WriteInfo("Sending HTTP request with custom HTTP Message Signatures");
+            WriteData("API Endpoint", apiEndpoint);
+
+            // Remove client certificate from the handler before making the API call
+            apiHandler.ClientCertificates.Clear();
+
+            var response = await apiHttpClient.GetAsync(apiEndpoint);
+            return response;
+        }
+
+        static HttpMessageHandler CreateDPoPHandler(OidcClient client,
+        string proofKey,
+        string accessToken,
+        HttpMessageHandler? apiInnerHandler = null)
+        {
+            var apiDpopHandler = new ProofTokenMessageHandler(proofKey, apiInnerHandler ?? new HttpClientHandler());
+
+            var handler = new RefreshTokenDelegatingHandler(
+                client,
+                accessToken,
+                "any",
+                "DPoP",
+                apiDpopHandler);
+
+            return handler;
         }
 
         public static void ConfigureServices(IServiceCollection services, RSA rsa, string keyId)
