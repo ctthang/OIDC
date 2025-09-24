@@ -221,6 +221,18 @@ namespace console_app
             Console.Read();
         }
 
+        /// <summary>
+        /// This is a demonstration of using the OidcClient package to call REST API with DPoP and access token.
+        /// This approach leverages the built-in DPoP support in the OidcClient library.
+        /// However:
+        ///     - it should be noted that the OidcClient package does not support HTTP Message Signatures (RFC 9421).
+        ///     - it only is used for happy cases demo purposes here, when there is error from the demo web api, it will trigger its code flow implementation - This is not a flow of our demo..
+        /// </summary>
+        /// <param name="apiEndpoint"></param>
+        /// <param name="dpopKey"></param>
+        /// <param name="accessToken"></param>
+        /// <param name="authority"></param>
+        /// <returns></returns>
         private static async Task<HttpResponseMessage> CallRestApiWithOidcClientAsync(string apiEndpoint, string dpopKey, string accessToken, string authority)
         {
             var oidcClient = new OidcClient(new OidcClientOptions()
