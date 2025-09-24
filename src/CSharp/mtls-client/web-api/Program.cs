@@ -225,7 +225,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     if (isDpopRequest)
                     {
                         Console.WriteLine("   Validating DPoP request");
-                        
+
+                        // Ensure that there is single DPoP header
+                        if (httpContext.Request.Headers["DPoP"].Count > 1)
+                        {
+                            Console.WriteLine("   Multiple DPoP headers detected");
+                            
+                            // Store error information in HttpContext for OnChallenge to access
+                            httpContext.Items["auth_error_code"] = "invalid_dpop_proof";
+                            httpContext.Items["auth_error_description"] = "Multiple DPoP headers are not allowed.";
+                            
+                            context.Fail("Multiple DPoP headers are not allowed.");
+                            return Task.CompletedTask;
+                        }
+
                         // Validate DPoP proof token - handle both JsonWebToken and JwtSecurityToken
                         var dpopProofValidation = DPoPValidator.ValidateDPoPProof(dpopHeader, httpContext, context.SecurityToken);
                         if (!dpopProofValidation.IsValid)
