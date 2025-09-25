@@ -10,13 +10,13 @@ namespace web_api
     public static class DPoPValidator
     {
         // Helper method to validate DPoP proof token according to RFC 9449
-        public static (bool IsValid, string ErrorMessage) ValidateDPoPProof(string dpopHeader, HttpContext httpContext, SecurityToken? accessToken)
+        public static (bool IsValid, string ErrorCode, string ErrorMessage) ValidateDPoPProof(string dpopHeader, HttpContext httpContext, SecurityToken? accessToken)
         {
             try
             {
                 if (string.IsNullOrEmpty(dpopHeader))
                 {
-                    return (false, "DPoP header is missing");
+                    return (false, "dpop_required", "DPoP header is missing");
                 }
                 
                 Console.WriteLine("[DPOP] Starting comprehensive DPoP validation per RFC 9449");
@@ -25,7 +25,7 @@ namespace web_api
                 var handler = new JwtSecurityTokenHandler();
                 if (!handler.CanReadToken(dpopHeader))
                 {
-                    return (false, "Invalid DPoP proof token format");
+                    return (false, "invalid_dpop_proof", "Invalid DPoP proof token format");
                 }
                 
                 var dpopToken = handler.ReadJwtToken(dpopHeader);
@@ -35,25 +35,25 @@ namespace web_api
                 // Validate typ header
                 if (!dpopToken.Header.TryGetValue("typ", out var typ) || !typ.Equals("dpop+jwt"))
                 {
-                    return (false, "Invalid typ header in DPoP proof - must be 'dpop+jwt'");
+                    return (false, "invalid_dpop_proof", "Invalid typ header in DPoP proof - must be 'dpop+jwt'");
                 }
                 
                 // Validate alg header (must be asymmetric algorithm)
                 if (!dpopToken.Header.TryGetValue("alg", out var alg) || string.IsNullOrEmpty(alg?.ToString()))
                 {
-                    return (false, "Missing alg header in DPoP proof");
+                    return (false, "invalid_dpop_proof", "Missing alg header in DPoP proof");
                 }
                 
                 var algorithm = alg.ToString();
                 if (!IsValidDPoPAlgorithm(algorithm))
                 {
-                    return (false, $"Invalid algorithm for DPoP proof: {algorithm}. Must be asymmetric algorithm");
+                    return (false, "invalid_dpop_proof", $"Invalid algorithm for DPoP proof: {algorithm}. Must be asymmetric algorithm");
                 }
                 
                 // Extract embedded JWK
                 if (!dpopToken.Header.TryGetValue("jwk", out var jwkObj))
                 {
-                    return (false, "Missing jwk header in DPoP proof");
+                    return (false, "invalid_dpop_proof", "Missing jwk header in DPoP proof");
                 }
                 
                 Console.WriteLine($"   [SUCCESS] DPoP proof structure valid (typ: {typ}, alg: {algorithm})");
@@ -62,7 +62,7 @@ namespace web_api
                 var signatureValidation = ValidateDPoPProofSignature(dpopHeader, jwkObj);
                 if (!signatureValidation.IsValid)
                 {
-                    return (false, $"DPoP proof signature validation failed: {signatureValidation.ErrorMessage}");
+                    return (false, "invalid_dpop_proof", $"DPoP proof signature validation failed: {signatureValidation.ErrorMessage}");
                 }
                 
                 Console.WriteLine("   [SUCCESS] DPoP proof signature validated successfully");
@@ -72,7 +72,7 @@ namespace web_api
                 var jwkThumbprint = CalculateJWKThumbprint(jwkJson);
                 if (string.IsNullOrEmpty(jwkThumbprint))
                 {
-                    return (false, "Failed to calculate JWK thumbprint from DPoP proof");
+                    return (false, "invalid_dpop_proof", "Failed to calculate JWK thumbprint from DPoP proof");
                 }
                 
                 Console.WriteLine($"   [INFO] JWK thumbprint calculated: {jwkThumbprint}");
@@ -81,7 +81,7 @@ namespace web_api
                 var tokenBindingValidation = ValidateAccessTokenBinding(httpContext, jwkThumbprint, out string accessTokenString);
                 if (!tokenBindingValidation.IsValid)
                 {
-                    return (false, $"Access token binding validation failed: {tokenBindingValidation.ErrorMessage}");
+                    return (false, tokenBindingValidation.ErrorCode, $"Access token binding validation failed: {tokenBindingValidation.ErrorMessage}");
                 }
                 
                 Console.WriteLine("   [SUCCESS] Access token binding validated successfully");
@@ -93,25 +93,27 @@ namespace web_api
                 if (!payload.TryGetValue("htm", out var htm) || 
                     !string.Equals(htm?.ToString(), httpContext.Request.Method, StringComparison.OrdinalIgnoreCase))
                 {
-                    return (false, $"htm claim mismatch. Expected: {httpContext.Request.Method}, Got: {htm}");
+                    return (false, "invalid_dpop_proof", $"htm claim mismatch. Expected: {httpContext.Request.Method}, Got: {htm}");
                 }
                 
                 // Validate htu claim (HTTP URI) - must match full request URL
                 if (!payload.TryGetValue("htu", out var htu))
                 {
-                    return (false, "Missing htu claim in DPoP proof");
+                    return (false, "invalid_dpop_proof", "Missing htu claim in DPoP proof");
                 }
                 
+                var normalizedHtu = NormalizeUri(new Uri(htu.ToString() ?? string.Empty));
                 var requestUri = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}{httpContext.Request.Path}";
-                if (!string.Equals(htu?.ToString(), requestUri, StringComparison.OrdinalIgnoreCase))
+                var normalizedRequestUri = NormalizeUri(new Uri(requestUri));
+                if (!string.Equals(normalizedHtu, normalizedRequestUri, StringComparison.OrdinalIgnoreCase))
                 {
-                    return (false, $"htu claim mismatch. Expected: {requestUri}, Got: {htu}");
+                    return (false, "invalid_dpop_proof", $"htu claim mismatch. Expected: {requestUri}, Got: {htu}");
                 }
                 
                 // Validate iat claim (issued at time) - must be recent
                 if (!payload.TryGetValue("iat", out var iat))
                 {
-                    return (false, "Missing iat claim in DPoP proof");
+                    return (false, "invalid_dpop_proof", "Missing iat claim in DPoP proof");
                 }
                 
                 var issuedAt = DateTimeOffset.FromUnixTimeSeconds(Convert.ToInt64(iat));
@@ -121,14 +123,14 @@ namespace web_api
                 // Strict timing for DPoP proofs (5 minutes as per RFC 9449)
                 if (timeDifference > 5)
                 {
-                    return (false, $"DPoP proof token is too old or from the future. Time difference: {timeDifference} minutes (max 5 minutes allowed)");
+                    return (false, "invalid_dpop_proof", $"DPoP proof token is too old or from the future. Time difference: {timeDifference} minutes (max 5 minutes allowed)");
                 }
 
                 // Validate jti claim (JWT ID) - must be unique for replay protection
                 // This is a demo resource server, ignore implementing jti nonce tracking to prevent replay attacks
                 if (!payload.TryGetValue("jti", out var jti) || string.IsNullOrEmpty(jti?.ToString()))
                 {
-                    return (false, "Missing or empty jti claim in DPoP proof");
+                    return (false, "invalid_dpop_proof", "Missing or empty jti claim in DPoP proof");
                 }
 
                 /*
@@ -144,12 +146,12 @@ namespace web_api
 
                     if (!ath.Equals(expectedAth))
                     {
-                        return (false, "DPoP's ath does not match the received Access token.");
+                        return (false, "invalid_dpop_proof", "DPoP's ath does not match the received Access token.");
                     }
                 }
                 else
                 {
-                    return (false, "Missing ath claim in DPoP proof when access token is presented.");
+                    return (false, "invalid_dpop_proof", "Missing ath claim in DPoP proof when access token is presented.");
                 }
 
                 Console.WriteLine($"   [INFO] jti claim present: {jti} (replay protection - should be tracked in production)");
@@ -158,16 +160,16 @@ namespace web_api
                 
                 Console.WriteLine("[SUCCESS] RFC 9449 compliant DPoP validation completed successfully");
                 
-                return (true, string.Empty);
+                return (true, string.Empty, string.Empty);
             }
             catch (Exception ex)
             {
-                return (false, $"Exception during DPoP validation: {ex.Message}");
+                return (false, "invalid_dpop_proof", $"Exception during DPoP validation: {ex.Message}");
             }
         }
 
         // Helper method to validate access token binding via cnf.jkt claim
-        public static (bool IsValid, string ErrorMessage) ValidateAccessTokenBinding(HttpContext httpContext, string expectedJwkThumbprint, out string accessTokenString)
+        public static (bool IsValid, string ErrorCode, string ErrorMessage) ValidateAccessTokenBinding(HttpContext httpContext, string expectedJwkThumbprint, out string accessTokenString)
         {
             try
             {
@@ -176,7 +178,7 @@ namespace web_api
                 var authHeader = httpContext.Request.Headers["Authorization"].FirstOrDefault();
                 if (string.IsNullOrEmpty(authHeader))
                 {
-                    return (false, "Missing Authorization header for access token binding validation");
+                    return (false, "invalid_request", "Missing Authorization header for access token binding validation");
                 }
                 
                 // Extract access token string
@@ -190,19 +192,19 @@ namespace web_api
                 }
                 else
                 {
-                    return (false, "Invalid Authorization header format for access token binding validation");
+                    return (false, "invalid_request", "Invalid Authorization header format for access token binding validation");
                 }
                 
                 if (string.IsNullOrEmpty(accessTokenString))
                 {
-                    return (false, "Empty access token string for binding validation");
+                    return (false, "invalid_token", "Empty access token string for binding validation");
                 }
                 
                 // Parse access token to extract cnf claim
                 var tokenHandler = new JwtSecurityTokenHandler();
                 if (!tokenHandler.CanReadToken(accessTokenString))
                 {
-                    return (false, "Cannot parse access token for binding validation");
+                    return (false, "invalid_token", "Cannot parse access token for binding validation");
                 }
                 
                 var accessToken = tokenHandler.ReadJwtToken(accessTokenString);
@@ -211,20 +213,20 @@ namespace web_api
                 var cnfClaim = accessToken.Claims.FirstOrDefault(c => c.Type == "cnf");
                 if (cnfClaim == null)
                 {
-                    return (false, "Access token missing cnf (confirmation) claim - not DPoP-bound");
+                    return (false, "invalid_token", "Access token missing cnf (confirmation) claim - not DPoP-bound");
                 }
                 
                 // Parse cnf claim JSON
                 var cnfJson = JsonDocument.Parse(cnfClaim.Value);
                 if (!cnfJson.RootElement.TryGetProperty("jkt", out var jktElement))
                 {
-                    return (false, "Access token cnf claim missing jkt (JWK thumbprint) property");
+                    return (false, "invalid_token", "Access token cnf claim missing jkt (JWK thumbprint) property");
                 }
                 
                 var accessTokenJwkThumbprint = jktElement.GetString();
                 if (string.IsNullOrEmpty(accessTokenJwkThumbprint))
                 {
-                    return (false, "Access token cnf.jkt claim is empty");
+                    return (false, "invalid_token", "Access token cnf.jkt claim is empty");
                 }
                 
                 // Compare JWK thumbprints
@@ -233,18 +235,18 @@ namespace web_api
                     Console.WriteLine($"   [ERROR] JWK thumbprint mismatch:");
                     Console.WriteLine($"      DPoP proof JWK thumbprint: {expectedJwkThumbprint}");
                     Console.WriteLine($"      Access token cnf.jkt:      {accessTokenJwkThumbprint}");
-                    return (false, "JWK thumbprint mismatch between DPoP proof and access token cnf.jkt claim");
+                    return (false, "invalid_token", "JWK thumbprint mismatch between DPoP proof and access token cnf.jkt claim");
                 }
 
                 // Validate 
                 
                 Console.WriteLine($"   [SUCCESS] JWK thumbprint match confirmed: {expectedJwkThumbprint}");
-                return (true, string.Empty);
+                return (true, string.Empty, string.Empty);
             }
             catch (Exception ex)
             {
                 accessTokenString = string.Empty;
-                return (false, $"Exception during access token binding validation: {ex.Message}");
+                return (false, "invalid_token", $"Exception during access token binding validation: {ex.Message}");
             }
         }
 
@@ -343,6 +345,33 @@ namespace web_api
             {
                 return (false, $"Exception during DPoP signature validation: {ex.Message}");
             }
+        }
+
+        private static string NormalizeUri(Uri uri)
+        {
+            if (uri == null)
+                return string.Empty;
+
+            // Perform syntax-based and scheme-based normalization
+            var builder = new UriBuilder(uri)
+            {
+                // Remove query and fragment as per DPoP specification
+                Query = string.Empty,
+                Fragment = string.Empty,
+                // Normalize scheme to lowercase
+                Scheme = uri.Scheme.ToLowerInvariant(),
+                // Normalize host to lowercase
+                Host = uri.Host.ToLowerInvariant()
+            };
+
+            // Remove default ports
+            if ((builder.Scheme == "http" && builder.Port == 80) ||
+                (builder.Scheme == "https" && builder.Port == 443))
+            {
+                builder.Port = -1;
+            }
+
+            return builder.Uri.ToString().TrimEnd('/');
         }
     }
 }

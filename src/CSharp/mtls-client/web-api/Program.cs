@@ -139,7 +139,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 if (isDpopRequest)
                 {
                     // For DPoP requests, include DPoP in WWW-Authenticate header
-                    var dpopChallenge = $"DPoP realm=\"{context.Request.Host}\"";
+                    var dpopChallenge = $"DPoP realm=\"{context.Request.Host}\" algs=\"RS256 RS384 RS512 PS256 PS384 PS512\"";
                     if (!string.IsNullOrEmpty(errorCode))
                     {
                         dpopChallenge += $", error=\"{errorCode}\"";
@@ -171,8 +171,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 
                 var errorResponse = new
                 {
-                    error = errorCode,
-                    error_description = errorDescription,
+                    error = !string.IsNullOrEmpty(authHeader) ? errorCode : null,
+                    error_description = !string.IsNullOrEmpty(authHeader) ? errorDescription : null,
                     request_type = isDpopRequest ? "DPoP" : "Bearer",
                     timestamp = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                     details = new
@@ -232,7 +232,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                             Console.WriteLine("   Multiple DPoP headers detected");
                             
                             // Store error information in HttpContext for OnChallenge to access
-                            httpContext.Items["auth_error_code"] = "invalid_dpop_proof";
+                            httpContext.Items["auth_error_code"] = "invalid_request";
                             httpContext.Items["auth_error_description"] = "Multiple DPoP headers are not allowed.";
                             
                             context.Fail("Multiple DPoP headers are not allowed.");
@@ -246,7 +246,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                             Console.WriteLine($"   DPoP proof validation failed: {dpopProofValidation.ErrorMessage}");
                             
                             // Store error information in HttpContext for OnChallenge to access
-                            httpContext.Items["auth_error_code"] = "invalid_dpop_proof";
+                            httpContext.Items["auth_error_code"] = dpopProofValidation.ErrorCode;
                             httpContext.Items["auth_error_description"] = dpopProofValidation.ErrorMessage;
                             
                             context.Fail($"DPoP proof validation failed: {dpopProofValidation.ErrorMessage}");
