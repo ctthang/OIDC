@@ -31,6 +31,7 @@ builder.Services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServe
 
 // Configure HTTP Message Signatures
 var enableHttpSignatures = builder.Configuration.GetValue<bool>("HttpSignatures:Enabled", false);
+var signatureMaxAgeSeconds = builder.Configuration.GetValue<int>("HttpSignatures:MaxAge", 300);
 
 // JWT authentication with certificate validation and cnf claim check
 var authority = builder.Configuration["Jwt:Authority"] ?? "";
@@ -296,7 +297,7 @@ if (enableHttpSignatures)
                 options.AlgorithmRequired =
                 options.TagRequired = true;
             options.MissingSignatureResponseStatus = 404;
-            options.MaxSignatureAge = TimeSpan.FromMinutes(5);
+            options.MaxSignatureAge = TimeSpan.FromSeconds(signatureMaxAgeSeconds);
 
             // Note: The default behavior should continue to next middleware
             // after successful verification. Do not set options.OnSignatureVerificationSucceeded!
